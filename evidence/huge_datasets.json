@@ -1,0 +1,924 @@
+{
+  "server": "PostgreSQL 18.3 (SereneDB 26.09.1.3)",
+  "cases": [
+    {
+      "query": "otel_overview",
+      "scope": "otel: catalog and index metadata",
+      "sql": "SELECT 'catalogued (queryable remotely)' AS scope, count(DISTINCT part) AS parts,\n       count(*) AS row_groups, sum(num_rows) AS log_rows,\n       round(sum(total_bytes) / 1e9, 1) AS compressed_gb, min(ts_min) AS ts_from, max(ts_max) AS ts_to\nFROM otel_row_groups\nUNION ALL\nSELECT 'indexed locally (full-text)', 1, row_groups, log_rows, round(body_bytes / 1e9, 2), ts_from, ts_to\nFROM otel_index_slice",
+      "params": {},
+      "row_count": 2,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 5.4,
+      "rows": [
+        {
+          "scope": "catalogued (queryable remotely)",
+          "parts": 50,
+          "row_groups": 81209,
+          "log_rows": 50000000000.0,
+          "compressed_gb": 1887.1,
+          "ts_from": "2025-09-23 00:00:00+00:00",
+          "ts_to": "2025-09-23 23:57:23.980053+00:00"
+        },
+        {
+          "scope": "indexed locally (full-text)",
+          "parts": 1,
+          "row_groups": 53,
+          "log_rows": 32612352.0,
+          "compressed_gb": 0.3,
+          "ts_from": "2025-09-23 00:00:00+00:00",
+          "ts_to": "2025-09-23 00:00:59.556863+00:00"
+        }
+      ],
+      "case": "overview",
+      "role": "all",
+      "question": "How much OpenTelemetry data is reachable, and how much is indexed locally?",
+      "downloaded_mb": 0.0
+    },
+    {
+      "query": "otel_volume_trend",
+      "scope": "otel catalog (all catalogued parts, no S3 reads), per hour, row-group granularity",
+      "sql": "SELECT date_trunc('hour', ts_min) AS bucket, sum(num_rows)::BIGINT AS log_rows,\n       count(*) AS row_groups, round(sum(total_bytes) / 1e9, 2) AS compressed_gb\nFROM otel_row_groups\nGROUP BY 1\nORDER BY 1\nLIMIT %(limit)s",
+      "params": {
+        "limit": 200
+      },
+      "row_count": 24,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 2.7,
+      "rows": [
+        {
+          "bucket": "2025-09-23 00:00:00+00:00",
+          "log_rows": 2026451968,
+          "row_groups": 3292,
+          "compressed_gb": 76.47
+        },
+        {
+          "bucket": "2025-09-23 01:00:00+00:00",
+          "log_rows": 2045514752,
+          "row_groups": 3324,
+          "compressed_gb": 77.47
+        },
+        {
+          "bucket": "2025-09-23 02:00:00+00:00",
+          "log_rows": 2036372480,
+          "row_groups": 3308,
+          "compressed_gb": 76.79
+        },
+        {
+          "bucket": "2025-09-23 03:00:00+00:00",
+          "log_rows": 2044875776,
+          "row_groups": 3321,
+          "compressed_gb": 77.08
+        },
+        {
+          "bucket": "2025-09-23 04:00:00+00:00",
+          "log_rows": 2054919168,
+          "row_groups": 3339,
+          "compressed_gb": 77.56
+        },
+        {
+          "bucket": "2025-09-23 05:00:00+00:00",
+          "log_rows": 2042278912,
+          "row_groups": 3318,
+          "compressed_gb": 77.16
+        },
+        {
+          "bucket": "2025-09-23 06:00:00+00:00",
+          "log_rows": 2055115126,
+          "row_groups": 3338,
+          "compressed_gb": 77.68
+        },
+        {
+          "bucket": "2025-09-23 07:00:00+00:00",
+          "log_rows": 2037806730,
+          "row_groups": 3314,
+          "compressed_gb": 77.02
+        },
+        {
+          "bucket": "2025-09-23 08:00:00+00:00",
+          "log_rows": 2044023808,
+          "row_groups": 3319,
+          "compressed_gb": 77.14
+        },
+        {
+          "bucket": "2025-09-23 09:00:00+00:00",
+          "log_rows": 2033501910,
+          "row_groups": 3302,
+          "compressed_gb": 76.67
+        },
+        {
+          "bucket": "2025-09-23 10:00:00+00:00",
+          "log_rows": 1998512426,
+          "row_groups": 3247,
+          "compressed_gb": 75.37
+        },
+        {
+          "bucket": "2025-09-23 11:00:00+00:00",
+          "log_rows": 2025788416,
+          "row_groups": 3293,
+          "compressed_gb": 76.39
+        },
+        {
+          "bucket": "2025-09-23 12:00:00+00:00",
+          "log_rows": 1978995712,
+          "row_groups": 3209,
+          "compressed_gb": 74.29
+        },
+        {
+          "bucket": "2025-09-23 13:00:00+00:00",
+          "log_rows": 1996641280,
+          "row_groups": 3245,
+          "compressed_gb": 75.28
+        },
+        {
+          "bucket": "2025-09-23 14:00:00+00:00",
+          "log_rows": 1999451136,
+          "row_groups": 3246,
+          "compressed_gb": 75.27
+        },
+        {
+          "bucket": "2025-09-23 15:00:00+00:00",
+          "log_rows": 1981434747,
+          "row_groups": 3217,
+          "compressed_gb": 74.37
+        },
+        {
+          "bucket": "2025-09-23 16:00:00+00:00",
+          "log_rows": 2210796893,
+          "row_groups": 3590,
+          "compressed_gb": 83.56
+        },
+        {
+          "bucket": "2025-09-23 17:00:00+00:00",
+          "log_rows": 2215582504,
+          "row_groups": 3597,
+          "compressed_gb": 83.57
+        },
+        {
+          "bucket": "2025-09-23 18:00:00+00:00",
+          "log_rows": 2242059776,
+          "row_groups": 3638,
+          "compressed_gb": 84.64
+        },
+        {
+          "bucket": "2025-09-23 19:00:00+00:00",
+          "log_rows": 2235249664,
+          "row_groups": 3631,
+          "compressed_gb": 84.8
+        },
+        {
+          "bucket": "2025-09-23 20:00:00+00:00",
+          "log_rows": 2221372416,
+          "row_groups": 3610,
+          "compressed_gb": 84.14
+        },
+        {
+          "bucket": "2025-09-23 21:00:00+00:00",
+          "log_rows": 2187514880,
+          "row_groups": 3552,
+          "compressed_gb": 82.68
+        },
+        {
+          "bucket": "2025-09-23 22:00:00+00:00",
+          "log_rows": 2184948868,
+          "row_groups": 3547,
+          "compressed_gb": 82.4
+        },
+        {
+          "bucket": "2025-09-23 23:00:00+00:00",
+          "log_rows": 2100790652,
+          "row_groups": 3412,
+          "compressed_gb": 79.29
+        }
+      ],
+      "case": "volume_whole_day",
+      "role": "manager",
+      "question": "How many log rows per hour does the whole day contain (50 files)?",
+      "downloaded_mb": 0.0
+    },
+    {
+      "query": "otel_error_rates",
+      "scope": "otel remote: 171,319,296 log rows in 278 row groups (2025-09-23 03:59:59.916194+00:00 .. 2025-09-23 04:05:00.845498+00:00; part 8 rows 152,600,576..323,919,871)",
+      "sql": "SELECT ServiceName AS service, count(*) AS log_rows,\n       count(*) FILTER (WHERE lower(SeverityText) IN ('error', 'fatal')) AS error_rows,\n       count(*) FILTER (WHERE lower(SeverityText) IN ('warn', 'warning')) AS warn_rows,\n       round(100.0 * count(*) FILTER (WHERE lower(SeverityText) IN ('error', 'fatal')) / count(*), 2) AS error_pct\nFROM (\n  SELECT ServiceName, SeverityText FROM read_parquet('https://public-pme.s3.eu-west-3.amazonaws.com/text_bench/part_008.parquet', file_row_number = true)\n  WHERE file_row_number >= %(lo0)s AND file_row_number < %(hi0)s\n) t\nGROUP BY 1\nORDER BY error_rows DESC, log_rows DESC\nLIMIT %(limit)s",
+      "params": {
+        "lo0": 152600576,
+        "hi0": 323919872,
+        "limit": 10
+      },
+      "row_count": 10,
+      "total_available": null,
+      "truncated": true,
+      "elapsed_ms": 37919.4,
+      "rows": [
+        {
+          "service": "frontend",
+          "log_rows": 51463655,
+          "error_rows": 18566601,
+          "warn_rows": 0,
+          "error_pct": 36.08
+        },
+        {
+          "service": "payment",
+          "log_rows": 6210332,
+          "error_rows": 2409962,
+          "warn_rows": 0,
+          "error_pct": 38.81
+        },
+        {
+          "service": "email",
+          "log_rows": 14950504,
+          "error_rows": 426748,
+          "warn_rows": 0,
+          "error_pct": 2.85
+        },
+        {
+          "service": "currency",
+          "log_rows": 2703387,
+          "error_rows": 21584,
+          "warn_rows": 0,
+          "error_pct": 0.8
+        },
+        {
+          "service": "checkout",
+          "log_rows": 4592503,
+          "error_rows": 3524,
+          "warn_rows": 210565,
+          "error_pct": 0.08
+        },
+        {
+          "service": "",
+          "log_rows": 112363,
+          "error_rows": 2605,
+          "warn_rows": 91,
+          "error_pct": 2.32
+        },
+        {
+          "service": "quote",
+          "log_rows": 4346643,
+          "error_rows": 2260,
+          "warn_rows": 0,
+          "error_pct": 0.05
+        },
+        {
+          "service": "accounting",
+          "log_rows": 218118,
+          "error_rows": 1161,
+          "warn_rows": 0,
+          "error_pct": 0.53
+        },
+        {
+          "service": "cart",
+          "log_rows": 72926140,
+          "error_rows": 257,
+          "warn_rows": 0,
+          "error_pct": 0.0
+        },
+        {
+          "service": "product-catalog",
+          "log_rows": 31815,
+          "error_rows": 41,
+          "warn_rows": 0,
+          "error_pct": 0.13
+        }
+      ],
+      "case": "error_rates_5min",
+      "role": "manager",
+      "question": "Which services have the highest error share, 04:00-04:05?",
+      "downloaded_mb": 667.3
+    },
+    {
+      "query": "otel_count_by",
+      "scope": "otel remote: 270,360,932 log rows in 439 row groups (2025-09-23 06:59:59.639048+00:00 .. 2025-09-23 07:08:00.413297+00:00; part 14 rows 304,913,782..575,274,713), severity = 'error'",
+      "sql": "SELECT service, log_rows, round(100.0 * log_rows / sum(log_rows) OVER (), 2) AS pct,\n       count(*) OVER () AS total_groups\nFROM (\n  SELECT ServiceName AS service, count(*) FILTER (WHERE TRUE AND lower(SeverityText) = lower(%(severity)s)) AS log_rows\n  FROM (\n  SELECT ServiceName, SeverityText FROM read_parquet('https://public-pme.s3.eu-west-3.amazonaws.com/text_bench/part_014.parquet', file_row_number = true)\n  WHERE file_row_number >= %(lo0)s AND file_row_number < %(hi0)s\n  ) t\n  GROUP BY 1\n  HAVING count(*) FILTER (WHERE TRUE AND lower(SeverityText) = lower(%(severity)s)) > 0\n) g\nORDER BY log_rows DESC\nLIMIT %(limit)s",
+      "params": {
+        "severity": "error",
+        "lo0": 304913782,
+        "hi0": 575274714,
+        "limit": 10
+      },
+      "row_count": 10,
+      "total_available": 13,
+      "truncated": true,
+      "elapsed_ms": 63822.4,
+      "rows": [
+        {
+          "service": "frontend",
+          "log_rows": 27379147,
+          "pct": 85.35
+        },
+        {
+          "service": "payment",
+          "log_rows": 3920136,
+          "pct": 12.22
+        },
+        {
+          "service": "email",
+          "log_rows": 701248,
+          "pct": 2.19
+        },
+        {
+          "service": "currency",
+          "log_rows": 65029,
+          "pct": 0.2
+        },
+        {
+          "service": "quote",
+          "log_rows": 5621,
+          "pct": 0.02
+        },
+        {
+          "service": "checkout",
+          "log_rows": 5538,
+          "pct": 0.02
+        },
+        {
+          "service": "accounting",
+          "log_rows": 1607,
+          "pct": 0.01
+        },
+        {
+          "service": "",
+          "log_rows": 1286,
+          "pct": 0.0
+        },
+        {
+          "service": "cart",
+          "log_rows": 616,
+          "pct": 0.0
+        },
+        {
+          "service": "product-catalog",
+          "log_rows": 93,
+          "pct": 0.0
+        }
+      ],
+      "case": "count_errors_by_service_8min",
+      "role": "team lead",
+      "question": "Where do error rows come from, 07:00-07:08?",
+      "downloaded_mb": 1074.3
+    },
+    {
+      "query": "otel_count_by",
+      "scope": "otel remote: 14:00-15:00 (refused)",
+      "sql": "-",
+      "params": {},
+      "row_count": 0,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 0.0,
+      "rows": [
+        {
+          "refused": "window covers 3247 row groups (2,000,065,536 rows); the limit is 600. Narrow the time range."
+        }
+      ],
+      "case": "window_guard",
+      "role": "all",
+      "question": "Does a too-large remote window get refused before reading anything?",
+      "downloaded_mb": 0.0
+    },
+    {
+      "query": "otel_trend",
+      "scope": "otel remote: 361,531,904 log rows in 587 row groups (2025-09-23 21:59:59.783613+00:00 .. 2025-09-23 22:10:00.691193+00:00; part 45 rows 713,646,080..999,999,999, part 46 rows 0..75,177,983), service = 'payment', per minute (time placed via catalog)",
+      "sql": "WITH blocks AS (\n  SELECT 45 AS part, file_row_number // 4096 AS block,\n         count(*) FILTER (WHERE TRUE AND ServiceName = %(service)s) AS n,\n         count(*) FILTER (WHERE TRUE AND ServiceName = %(service)s AND lower(SeverityText) IN ('error', 'fatal')) AS err\n  FROM read_parquet('https://public-pme.s3.eu-west-3.amazonaws.com/text_bench/part_045.parquet', file_row_number = true)\n  WHERE file_row_number >= %(lo0)s AND file_row_number < %(hi0)s\n  GROUP BY 1, 2\n  UNION ALL\n  SELECT 46 AS part, file_row_number // 4096 AS block,\n         count(*) FILTER (WHERE TRUE AND ServiceName = %(service)s) AS n,\n         count(*) FILTER (WHERE TRUE AND ServiceName = %(service)s AND lower(SeverityText) IN ('error', 'fatal')) AS err\n  FROM read_parquet('https://public-pme.s3.eu-west-3.amazonaws.com/text_bench/part_046.parquet', file_row_number = true)\n  WHERE file_row_number >= %(lo1)s AND file_row_number < %(hi1)s\n  GROUP BY 1, 2\n),\nplaced AS (\n  SELECT b.n, b.err, g.ts_min + (g.ts_max - g.ts_min) *\n         ((b.block * 4096 - g.first_row)::DOUBLE / g.num_rows) AS ts\n  FROM blocks b JOIN otel_row_groups g\n    ON g.part = b.part AND b.block * 4096 >= g.first_row AND b.block * 4096 < g.first_row + g.num_rows\n)\nSELECT date_trunc('minute', ts) AS bucket, sum(n)::BIGINT AS log_rows, sum(err)::BIGINT AS error_rows\nFROM placed\nGROUP BY 1\nHAVING sum(n) > 0\nORDER BY 1\nLIMIT %(limit)s",
+      "params": {
+        "service": "payment",
+        "lo0": 713646080,
+        "hi0": 1000000000,
+        "lo1": 0,
+        "hi1": 75177984,
+        "limit": 200
+      },
+      "row_count": 12,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 86191.4,
+      "rows": [
+        {
+          "bucket": "2025-09-23 21:59:00+00:00",
+          "log_rows": 4268,
+          "error_rows": 1644
+        },
+        {
+          "bucket": "2025-09-23 22:00:00+00:00",
+          "log_rows": 1284804,
+          "error_rows": 508467
+        },
+        {
+          "bucket": "2025-09-23 22:01:00+00:00",
+          "log_rows": 1288855,
+          "error_rows": 510191
+        },
+        {
+          "bucket": "2025-09-23 22:02:00+00:00",
+          "log_rows": 1268949,
+          "error_rows": 501738
+        },
+        {
+          "bucket": "2025-09-23 22:03:00+00:00",
+          "log_rows": 1301332,
+          "error_rows": 515865
+        },
+        {
+          "bucket": "2025-09-23 22:04:00+00:00",
+          "log_rows": 1290016,
+          "error_rows": 512011
+        },
+        {
+          "bucket": "2025-09-23 22:05:00+00:00",
+          "log_rows": 1297679,
+          "error_rows": 513027
+        },
+        {
+          "bucket": "2025-09-23 22:06:00+00:00",
+          "log_rows": 1284081,
+          "error_rows": 505865
+        },
+        {
+          "bucket": "2025-09-23 22:07:00+00:00",
+          "log_rows": 1294630,
+          "error_rows": 508360
+        },
+        {
+          "bucket": "2025-09-23 22:08:00+00:00",
+          "log_rows": 1305434,
+          "error_rows": 512405
+        },
+        {
+          "bucket": "2025-09-23 22:09:00+00:00",
+          "log_rows": 1340079,
+          "error_rows": 526249
+        },
+        {
+          "bucket": "2025-09-23 22:10:00+00:00",
+          "log_rows": 15668,
+          "error_rows": 6194
+        }
+      ],
+      "case": "trend_payment_errors_per_minute",
+      "role": "team lead",
+      "question": "How do payment errors develop per minute, 22:00-22:10?",
+      "downloaded_mb": 1527.8
+    },
+    {
+      "query": "otel_trend",
+      "scope": "otel remote: 100,237,312 log rows in 163 row groups (2025-09-23 11:57:59.395341+00:00 .. 2025-09-23 12:01:01.080000+00:00; part 24 rows 378,806,272..479,043,583), per minute (time placed via catalog)",
+      "sql": "WITH blocks AS (\n  SELECT 24 AS part, file_row_number // 4096 AS block,\n         count(*) FILTER (WHERE TRUE) AS n,\n         count(*) FILTER (WHERE TRUE AND lower(SeverityText) IN ('error', 'fatal')) AS err\n  FROM read_parquet('https://public-pme.s3.eu-west-3.amazonaws.com/text_bench/part_024.parquet', file_row_number = true)\n  WHERE file_row_number >= %(lo0)s AND file_row_number < %(hi0)s\n  GROUP BY 1, 2\n),\nplaced AS (\n  SELECT b.n, b.err, g.ts_min + (g.ts_max - g.ts_min) *\n         ((b.block * 4096 - g.first_row)::DOUBLE / g.num_rows) AS ts\n  FROM blocks b JOIN otel_row_groups g\n    ON g.part = b.part AND b.block * 4096 >= g.first_row AND b.block * 4096 < g.first_row + g.num_rows\n)\nSELECT date_trunc('minute', ts) AS bucket, sum(n)::BIGINT AS log_rows, sum(err)::BIGINT AS error_rows\nFROM placed\nGROUP BY 1\nHAVING sum(n) > 0\nORDER BY 1\nLIMIT %(limit)s",
+      "params": {
+        "lo0": 378806272,
+        "hi0": 479043584,
+        "limit": 200
+      },
+      "row_count": 5,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 22909.6,
+      "rows": [
+        {
+          "bucket": "2025-09-23 11:57:00+00:00",
+          "log_rows": 331776,
+          "error_rows": 39787
+        },
+        {
+          "bucket": "2025-09-23 11:58:00+00:00",
+          "log_rows": 33202176,
+          "error_rows": 3906783
+        },
+        {
+          "bucket": "2025-09-23 11:59:00+00:00",
+          "log_rows": 32559104,
+          "error_rows": 3775096
+        },
+        {
+          "bucket": "2025-09-23 12:00:00+00:00",
+          "log_rows": 33595392,
+          "error_rows": 4101593
+        },
+        {
+          "bucket": "2025-09-23 12:01:00+00:00",
+          "log_rows": 548864,
+          "error_rows": 55812
+        }
+      ],
+      "case": "trend_across_files",
+      "role": "team lead",
+      "question": "Error trend across the boundary of two files, 11:58-12:01",
+      "downloaded_mb": 374.5
+    },
+    {
+      "query": "otel_top_messages",
+      "scope": "otel remote: 20,512,768 log rows in 33 row groups (2025-09-23 22:59:59.318260+00:00 .. 2025-09-23 23:00:30.803485+00:00; part 47 rows 898,586,756..919,099,523), Body column ≤ 184 MB compressed, severity = 'error'",
+      "sql": "SELECT CASE WHEN TRUE AND lower(SeverityText) = lower(%(severity)s) THEN regexp_replace(regexp_replace(left(Body, 300), '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<uuid>', 'g'), '0x[0-9a-fA-F]+|\\b[0-9a-fA-F]*[0-9][0-9a-fA-F]*\\b', '<*>', 'g') END AS pattern,\n       ServiceName AS service, lower(SeverityText) AS severity,\n       count(*) AS log_rows, count(*) OVER () AS total_patterns\nFROM (\n  SELECT ServiceName, SeverityText, Body FROM read_parquet('https://public-pme.s3.eu-west-3.amazonaws.com/text_bench/part_047.parquet', file_row_number = true)\n  WHERE file_row_number >= %(lo0)s AND file_row_number < %(hi0)s\n) t\nGROUP BY 1, 2, 3\nHAVING pattern IS NOT NULL\nORDER BY log_rows DESC\nLIMIT %(limit)s",
+      "params": {
+        "severity": "error",
+        "lo0": 898586756,
+        "hi0": 919099524,
+        "limit": 10
+      },
+      "row_count": 10,
+      "total_available": 569,
+      "truncated": true,
+      "elapsed_ms": 15921.2,
+      "rows": [
+        {
+          "pattern": "Failed to place order",
+          "service": "frontend",
+          "severity": "error",
+          "log_rows": 305600
+        },
+        {
+          "pattern": "  details: 'failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.',",
+          "service": "frontend",
+          "severity": "error",
+          "log_rows": 292179
+        },
+        {
+          "pattern": "  details: 'failed to convert shipping cost to currency: failed to convert currency: rpc error: code = Unavailable desc = error reading from server: read tcp <*>.<*>.<*>.<*>:<*>-><*>.<*>.<*>.<*>:<*>: read: connection reset by peer',",
+          "service": "frontend",
+          "severity": "error",
+          "log_rows": 181770
+        },
+        {
+          "pattern": " ⨯ Error: <*> INTERNAL: failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.",
+          "service": "frontend",
+          "severity": "error",
+          "log_rows": 146089
+        },
+        {
+          "pattern": "Error: <*> INTERNAL: failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.",
+          "service": "frontend",
+          "severity": "error",
+          "log_rows": 146089
+        },
+        {
+          "pattern": "{\"error\":{\"code\":<*>,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}},\"level\":\"error\",\"message\":\"Failed to place order\",\"span_id\":\"<*>\",\"trace_flags\":\"<*>\"",
+          "service": "frontend",
+          "severity": "error",
+          "log_rows": 146084
+        },
+        {
+          "pattern": " ⨯ {\"code\":<*>,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}",
+          "service": "frontend",
+          "severity": "error",
+          "log_rows": 146035
+        },
+        {
+          "pattern": "{\"code\":<*>,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}",
+          "service": "frontend",
+          "severity": "error",
+          "log_rows": 146028
+        },
+        {
+          "pattern": "{\"level\":\"error\",\"span_id\":\"<*>\",\"trace_flags\":\"<*>\",\"trace_id\":\"<*>\"}",
+          "service": "payment",
+          "severity": "error",
+          "log_rows": 145958
+        },
+        {
+          "pattern": "Visa cache full: cannot add new item.",
+          "service": "payment",
+          "severity": "error",
+          "log_rows": 127352
+        }
+      ],
+      "case": "top_error_messages_30s",
+      "role": "engineer",
+      "question": "Which error messages dominate, 23:00:00-23:00:30?",
+      "downloaded_mb": 282.2
+    },
+    {
+      "query": "otel_search",
+      "scope": "otel index (part 0 slice, see otel_index_slice): full-text '\"failed to charge card\"', severity = 'error'",
+      "sql": "SELECT file_row_number, ts, ServiceName, SeverityText, TraceId, left(Body, 500) AS body\nFROM otel_logs_idx\nWHERE Body @@ websearch_to_tsquery(%(text)s) AND SeverityText = %(severity)s\nORDER BY file_row_number\nLIMIT %(limit)s;\n\nSELECT count(*) AS total_matches\nFROM otel_logs_idx\nWHERE Body @@ websearch_to_tsquery(%(text)s) AND SeverityText = %(severity)s",
+      "params": {
+        "text": "\"failed to charge card\"",
+        "severity": "error",
+        "limit": 5
+      },
+      "row_count": 5,
+      "total_available": 1768474,
+      "truncated": true,
+      "elapsed_ms": 1380.1,
+      "rows": [
+        {
+          "file_row_number": 1,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "0ce994d55ca67ef4890f49805d0f379a",
+          "body": "{\"code\":13,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        },
+        {
+          "file_row_number": 6,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "3e99c6e9cda582f526142cf3ef6e5a9f",
+          "body": " ⨯ {\"code\":13,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        },
+        {
+          "file_row_number": 12,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "723fc518ae721363e12a5835b567d29d",
+          "body": "{\"code\":13,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        },
+        {
+          "file_row_number": 14,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "807a14674c97ba84ad136874cedc1f4b",
+          "body": " ⨯ {\"code\":13,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        },
+        {
+          "file_row_number": 16,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "8ee25a428c683e8374dd6ae8afdb66b6",
+          "body": " ⨯ {\"code\":13,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        }
+      ],
+      "case": "index_search_charge_card",
+      "role": "engineer",
+      "question": "Find 'failed to charge card' errors in the indexed slice",
+      "downloaded_mb": 6.6
+    },
+    {
+      "query": "otel_index_count_by",
+      "scope": "otel index (part 0 slice): full-text 'timeout'",
+      "sql": "SELECT ServiceName AS service, count(*) AS log_rows,\n       round(100.0 * count(*) / sum(count(*)) OVER (), 2) AS pct, count(*) OVER () AS total_groups\nFROM otel_logs_idx\nWHERE Body @@ websearch_to_tsquery(%(text)s)\nGROUP BY 1\nORDER BY log_rows DESC\nLIMIT %(limit)s",
+      "params": {
+        "limit": 50,
+        "text": "timeout"
+      },
+      "row_count": 5,
+      "total_available": 5,
+      "truncated": false,
+      "elapsed_ms": 13.8,
+      "rows": [
+        {
+          "service": "",
+          "log_rows": 52,
+          "pct": 60.47
+        },
+        {
+          "service": "kafka",
+          "log_rows": 14,
+          "pct": 16.28
+        },
+        {
+          "service": "ad",
+          "log_rows": 12,
+          "pct": 13.95
+        },
+        {
+          "service": "shipping",
+          "log_rows": 6,
+          "pct": 6.98
+        },
+        {
+          "service": "fraud-detection",
+          "log_rows": 2,
+          "pct": 2.33
+        }
+      ],
+      "case": "index_services_for_timeout",
+      "role": "engineer",
+      "question": "Which services log 'timeout' in the indexed slice?",
+      "downloaded_mb": 0.0
+    },
+    {
+      "query": "otel_index_count_by",
+      "scope": "otel index (part 0 slice): all indexed rows",
+      "sql": "SELECT ServiceName || ' / ' || SeverityText AS service_severity, count(*) AS log_rows,\n       round(100.0 * count(*) / sum(count(*)) OVER (), 2) AS pct, count(*) OVER () AS total_groups\nFROM otel_logs_idx\nGROUP BY 1\nORDER BY log_rows DESC\nLIMIT %(limit)s",
+      "params": {
+        "limit": 15
+      },
+      "row_count": 15,
+      "total_available": 51,
+      "truncated": true,
+      "elapsed_ms": 294.9,
+      "rows": [
+        {
+          "service_severity": "cart / info",
+          "log_rows": 9558481,
+          "pct": 29.31
+        },
+        {
+          "service_severity": "frontend / info",
+          "log_rows": 5476406,
+          "pct": 16.79
+        },
+        {
+          "service_severity": "cart / information",
+          "log_rows": 4645364,
+          "pct": 14.24
+        },
+        {
+          "service_severity": "frontend / error",
+          "log_rows": 3410035,
+          "pct": 10.46
+        },
+        {
+          "service_severity": "email / info",
+          "log_rows": 2278131,
+          "pct": 6.99
+        },
+        {
+          "service_severity": "shipping / info",
+          "log_rows": 905068,
+          "pct": 2.78
+        },
+        {
+          "service_severity": "quote / info",
+          "log_rows": 838975,
+          "pct": 2.57
+        },
+        {
+          "service_severity": "recommendation / info",
+          "log_rows": 837791,
+          "pct": 2.57
+        },
+        {
+          "service_severity": "checkout / info",
+          "log_rows": 837600,
+          "pct": 2.57
+        },
+        {
+          "service_severity": "recommendation / trace",
+          "log_rows": 835392,
+          "pct": 2.56
+        },
+        {
+          "service_severity": "payment / info",
+          "log_rows": 670149,
+          "pct": 2.05
+        },
+        {
+          "service_severity": "frontend / trace",
+          "log_rows": 554191,
+          "pct": 1.7
+        },
+        {
+          "service_severity": "currency / info",
+          "log_rows": 522207,
+          "pct": 1.6
+        },
+        {
+          "service_severity": "payment / error",
+          "log_rows": 469451,
+          "pct": 1.44
+        },
+        {
+          "service_severity": "email / trace",
+          "log_rows": 437756,
+          "pct": 1.34
+        }
+      ],
+      "case": "index_service_severity",
+      "role": "team lead",
+      "question": "Service/severity mix of the indexed slice (from the index only)",
+      "downloaded_mb": 0.0
+    },
+    {
+      "query": "otel_context",
+      "scope": "otel remote: part 0 rows 0..7",
+      "sql": "SELECT file_row_number, file_row_number - %(anchor)s AS offset_rows,\n       Timestamp::TIMESTAMPTZ AS ts, ServiceName, SeverityText, TraceId, left(Body, 500) AS body\nFROM read_parquet('https://public-pme.s3.eu-west-3.amazonaws.com/text_bench/part_000.parquet', file_row_number = true)\nWHERE file_row_number >= %(lo)s AND file_row_number < %(hi)s\nORDER BY file_row_number",
+      "params": {
+        "anchor": 1,
+        "lo": 0,
+        "hi": 8
+      },
+      "row_count": 8,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 1091.0,
+      "rows": [
+        {
+          "file_row_number": 0,
+          "offset_rows": -1,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "0ce994d55ca67ef4890f49805d0f379a",
+          "body": "Failed to place order"
+        },
+        {
+          "file_row_number": 1,
+          "offset_rows": 0,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "0ce994d55ca67ef4890f49805d0f379a",
+          "body": "{\"code\":13,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        },
+        {
+          "file_row_number": 2,
+          "offset_rows": 1,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "info",
+          "traceid": "2ab494cbfcfd5b2a092a27f7f9172f13",
+          "body": "Checkout"
+        },
+        {
+          "file_row_number": 3,
+          "offset_rows": 2,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "2ba7ac99add5a1156ce3301aee118597",
+          "body": "{\"code\":13,\"details\":\"failed to convert shipping cost to currency: failed to convert currency: rpc error: code = Unavailable desc = error reading from server: read tcp 10.124.1.16:53466->34.118.228.146:8080: read: connection reset by peer\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        },
+        {
+          "file_row_number": 4,
+          "offset_rows": 3,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "2ba7ac99add5a1156ce3301aee118597",
+          "body": "Failed to place order"
+        },
+        {
+          "file_row_number": 5,
+          "offset_rows": 4,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "info",
+          "traceid": "315dae630e496e3c8af64f16bd5561fb",
+          "body": "Checkout"
+        },
+        {
+          "file_row_number": 6,
+          "offset_rows": 5,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "3e99c6e9cda582f526142cf3ef6e5a9f",
+          "body": " ⨯ {\"code\":13,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        },
+        {
+          "file_row_number": 7,
+          "offset_rows": 6,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "traceid": "5d644a0e93613952857b7dd9ce3ee3ac",
+          "body": " ⨯ {\"code\":13,\"details\":\"failed to prepare order: failed to convert price of \\\"1YMWWN1N4O\\\" to USD\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        }
+      ],
+      "case": "context_first_error",
+      "role": "engineer",
+      "question": "What happened just before/after the first indexed charge-card error?",
+      "downloaded_mb": 12.8
+    },
+    {
+      "query": "otel_trace",
+      "scope": "otel remote: part 0 rows 0..300,000, TraceId = '0ce994d55ca67ef4890f49805d0f379a'",
+      "sql": "SELECT hit AS file_row_number, ts, ServiceName, SeverityText, SpanId, body,\n       count(*) OVER () AS total_matches\nFROM (\n  SELECT CASE WHEN TraceId = %(trace)s THEN file_row_number END AS hit,\n         any_value(Timestamp::TIMESTAMPTZ) AS ts, any_value(ServiceName) AS ServiceName,\n         any_value(SeverityText) AS SeverityText, any_value(SpanId) AS SpanId,\n         any_value(left(Body, 300)) AS body\n  FROM read_parquet('https://public-pme.s3.eu-west-3.amazonaws.com/text_bench/part_000.parquet', file_row_number = true)\n  WHERE file_row_number >= %(lo)s AND file_row_number < %(hi)s\n  GROUP BY 1\n  HAVING hit IS NOT NULL\n) t\nORDER BY file_row_number\nLIMIT %(limit)s",
+      "params": {
+        "lo": 0,
+        "hi": 300001,
+        "trace": "0ce994d55ca67ef4890f49805d0f379a",
+        "limit": 100
+      },
+      "row_count": 3,
+      "total_available": 3,
+      "truncated": false,
+      "elapsed_ms": 128.5,
+      "rows": [
+        {
+          "file_row_number": 0,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "spanid": "63cdb589056ff454",
+          "body": "Failed to place order"
+        },
+        {
+          "file_row_number": 1,
+          "ts": "2025-09-23 00:00:00+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "spanid": "63cdb589056ff454",
+          "body": "{\"code\":13,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        },
+        {
+          "file_row_number": 969,
+          "ts": "2025-09-23 00:00:00.002000+00:00",
+          "servicename": "frontend",
+          "severitytext": "error",
+          "spanid": "63cdb589056ff454",
+          "body": " ⨯ {\"code\":13,\"details\":\"failed to charge card: could not charge the card: rpc error: code = Unknown desc = Visa cache full: cannot add new item.\",\"metadata\":{\"content-type\":[\"application/grpc\"]}}"
+        }
+      ],
+      "case": "trace_first_error",
+      "role": "engineer",
+      "question": "Every log row of that error's trace",
+      "downloaded_mb": 0.0
+    }
+  ]
+}

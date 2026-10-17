@@ -9,7 +9,7 @@
       "row_count": 2,
       "total_available": null,
       "truncated": false,
-      "elapsed_ms": 45.8,
+      "elapsed_ms": 84.0,
       "rows": [
         {
           "dataset": "bgl",
@@ -50,7 +50,7 @@
       "row_count": 5,
       "total_available": 485,
       "truncated": true,
-      "elapsed_ms": 6.3,
+      "elapsed_ms": 13.9,
       "rows": [
         {
           "line_no": 3313795,
@@ -114,7 +114,7 @@
       "row_count": 5,
       "total_available": 152734,
       "truncated": true,
-      "elapsed_ms": 14.4,
+      "elapsed_ms": 19.0,
       "rows": [
         {
           "line_no": 17742,
@@ -179,7 +179,7 @@
       "row_count": 10,
       "total_available": 16,
       "truncated": true,
-      "elapsed_ms": 7.7,
+      "elapsed_ms": 14.5,
       "rows": [
         {
           "source_file": "openstack_normal1",
@@ -310,7 +310,7 @@
       "row_count": 17,
       "total_available": null,
       "truncated": false,
-      "elapsed_ms": 4.1,
+      "elapsed_ms": 8.4,
       "rows": [
         {
           "source_file": "openstack_normal1",
@@ -535,7 +535,7 @@
       "row_count": 11,
       "total_available": null,
       "truncated": false,
-      "elapsed_ms": 5.4,
+      "elapsed_ms": 7.0,
       "rows": [
         {
           "line_no": 3313790,
@@ -664,7 +664,7 @@
       "row_count": 25,
       "total_available": 25,
       "truncated": false,
-      "elapsed_ms": 2.1,
+      "elapsed_ms": 3.5,
       "rows": [
         {
           "source_file": "openstack_abnormal",
@@ -982,7 +982,7 @@
       "row_count": 4,
       "total_available": 4,
       "truncated": false,
-      "elapsed_ms": 5.4,
+      "elapsed_ms": 5.5,
       "rows": [
         {
           "team": "Compute Kernel",
@@ -1028,7 +1028,7 @@
       "row_count": 15,
       "total_available": 41,
       "truncated": true,
-      "elapsed_ms": 5.5,
+      "elapsed_ms": 6.5,
       "rows": [
         {
           "alert_label": "KERNDTLB",
@@ -1152,7 +1152,7 @@
       "row_count": 2,
       "total_available": 2,
       "truncated": false,
-      "elapsed_ms": 2.0,
+      "elapsed_ms": 1.9,
       "rows": [
         {
           "team": "Virtualization",
@@ -1628,7 +1628,7 @@
       "row_count": 11,
       "total_available": null,
       "truncated": false,
-      "elapsed_ms": 2.5,
+      "elapsed_ms": 2.4,
       "rows": [
         {
           "bucket": "2005-06-05 00:00:00",
@@ -1690,7 +1690,7 @@
       "row_count": 10,
       "total_available": 2259,
       "truncated": true,
-      "elapsed_ms": 69.0,
+      "elapsed_ms": 79.3,
       "rows": [
         {
           "pattern": "data TLB error interrupt",
@@ -1819,7 +1819,7 @@
       "row_count": 4,
       "total_available": 4,
       "truncated": false,
-      "elapsed_ms": 6.6,
+      "elapsed_ms": 7.9,
       "rows": [
         {
           "pattern": "Unknown base file: /var/lib/nova/instances/_base/<*>",
@@ -2010,7 +2010,7 @@
       "row_count": 4,
       "total_available": null,
       "truncated": false,
-      "elapsed_ms": 60.3,
+      "elapsed_ms": 62.1,
       "rows": [
         {
           "team": "Compute Kernel",
@@ -2072,7 +2072,7 @@
       "row_count": 2,
       "total_available": null,
       "truncated": false,
-      "elapsed_ms": 6.7,
+      "elapsed_ms": 7.1,
       "rows": [
         {
           "team": "Virtualization",
@@ -2113,7 +2113,7 @@
       "row_count": 15,
       "total_available": 33,
       "truncated": true,
-      "elapsed_ms": 10.9,
+      "elapsed_ms": 12.4,
       "rows": [
         {
           "endpoint": "GET /v2/{tenant}/servers/detail",
@@ -2297,7 +2297,7 @@
       "row_count": 5,
       "total_available": 5,
       "truncated": false,
-      "elapsed_ms": 7.2,
+      "elapsed_ms": 7.3,
       "rows": [
         {
           "status": "200",
@@ -2371,7 +2371,7 @@
       "row_count": 26,
       "total_available": null,
       "truncated": false,
-      "elapsed_ms": 5.0,
+      "elapsed_ms": 5.1,
       "rows": [
         {
           "bucket": "2017-05-14 19:00:00",
@@ -2597,7 +2597,7 @@
       "row_count": 10,
       "total_available": null,
       "truncated": true,
-      "elapsed_ms": 6.1,
+      "elapsed_ms": 6.5,
       "rows": [
         {
           "endpoint": "POST /v2/{tenant}/os-server-external-events",
@@ -2685,7 +2685,7 @@
       "row_count": 12,
       "total_available": null,
       "truncated": false,
-      "elapsed_ms": 4.9,
+      "elapsed_ms": 5.0,
       "rows": [
         {
           "component": "nova.virt.libvirt.imagecache",
@@ -2809,7 +2809,7 @@
       "row_count": 8,
       "total_available": null,
       "truncated": false,
-      "elapsed_ms": 14.1,
+      "elapsed_ms": 14.2,
       "rows": [
         {
           "step": "build instance",
@@ -2908,7 +2908,7 @@
       "row_count": 10,
       "total_available": 2066,
       "truncated": true,
-      "elapsed_ms": 16.9,
+      "elapsed_ms": 17.9,
       "rows": [
         {
           "instance_id": "a445709b-6ad0-40ec-8860-bec60b6ca0c2",
