@@ -1,10 +1,18 @@
-# Google App Engine generated folder
 appengine-generated/
-
-# Downloaded datasets (scripts/download.sh)
-data/raw/
-
-.DS_Store
-
-# Local settings (copy from .env.example)
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
 .env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+# Preserve main's small reviewed ownership fixture; exclude every other dataset.
+data/*
+!data/ownership.csv
+artifacts/
+.idea/
+.DS_Store
+.kiro/settings/mcp.json

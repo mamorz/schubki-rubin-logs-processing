@@ -1,0 +1,16 @@
+dataset,component,team,mapping_version,provenance
+bgl,APP,Team Aurora,v1,Fictional hackathon mapping; not authoritative
+bgl,DISCOVERY,Team Compass,v1,Fictional hackathon mapping; not authoritative
+bgl,HARDWARE,Team Forge,v1,Fictional hackathon mapping; not authoritative
+bgl,KERNEL,Team Keystone,v1,Fictional hackathon mapping; not authoritative
+bgl,MMCS,Team Orbit,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.api.openstack.compute.server_external_events,Team Gateway,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.api.openstack.wsgi,Team Gateway,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.compute.claims,Team Nova Runtime,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.compute.manager,Team Nova Runtime,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.compute.resource_tracker,Team Nova Runtime,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.metadata.wsgi.server,Team Metadata,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.osapi_compute.wsgi.server,Team Gateway,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.scheduler.host_manager,Team Placement,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.virt.libvirt.driver,Team Hypervisor,v1,Fictional hackathon mapping; not authoritative
+openstack,nova.virt.libvirt.imagecache,Team Hypervisor,v1,Fictional hackathon mapping; not authoritative

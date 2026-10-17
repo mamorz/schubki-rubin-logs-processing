@@ -1,7 +1,12 @@
 #!/usr/bin/env bash
 # (Re)create the schema and load BGL, OpenStack and the ownership table into the
-# running SereneDB (docker compose up -d first). Takes about a minute.
+# running SereneDB. DESTRUCTIVE: requires explicit operator approval.
 set -euo pipefail
+
+if [ "${1:-}" != "--confirm-recreate-and-full-load" ]; then
+    echo "Refusing to drop schema and load full corpora without --confirm-recreate-and-full-load" >&2
+    exit 2
+fi
 
 cd "$(dirname "$0")/.."
 
