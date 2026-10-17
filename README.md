@@ -206,6 +206,14 @@ returns at most 50 records; summaries at most 100 groups; nearby context at most
 timestamps without a timezone. All user filter values remain bound parameters.
 Neither proximity nor log-record counts establish incident causation.
 
+`search_logs` accepts optional `match_mode`: `any` (default, existing OR full-text
+behavior), `phrase` (adjacent ordered tokens anywhere in a message), `exact`
+(equality with the entire stored message, including case and whitespace), or `all`
+(all tokens, any order). Phrase matching uses the existing index dictionary;
+it is not raw string equality. All modes retain filters, complete filtered counts,
+limits, SQL/parameter provenance, and truncation reporting. See
+[search mode semantics, verification, and timings](docs/search_match_modes.md).
+
 After the database is ready, run the real read-only HTTP verifier:
 
 ```bash

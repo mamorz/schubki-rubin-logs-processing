@@ -10,7 +10,7 @@ import pytest
 
 from log_insights.config import Settings
 from log_insights.db import connect
-from log_insights.ingestion import BGL_SEARCH_INDEX, OPENSTACK_SEARCH_INDEX
+from log_insights.ingestion import BGL_SEARCH_INDEX, BGL_TABLE, OPENSTACK_SEARCH_INDEX, OPENSTACK_TABLE
 from log_insights.mcp_server import build_server
 from log_insights.queries import DATASET_SPECS
 
@@ -35,6 +35,7 @@ def _direct_search(
     severity: str,
     limit: int,
 ) -> tuple[list[dict[str, object]], int]:
+    table = {BGL_SEARCH_INDEX: BGL_TABLE, OPENSTACK_SEARCH_INDEX: OPENSTACK_TABLE}[index]
     with connect(settings) as connection:
         with connection.cursor() as cursor:
             cursor.execute(
@@ -45,10 +46,10 @@ def _direct_search(
                     component,
                     severity,
                     message
-                FROM {index}
-                WHERE message @@ %s
-                  AND event_time >= %s
-                  AND event_time < %s
+                FROM {table}
+                WHERE line_id IN (SELECT line_id FROM {index} WHERE message @@ %s)
+                  AND event_time >= %t
+                  AND event_time < %t
                   AND component = %s
                   AND severity = %s
                 ORDER BY event_time, line_id
@@ -58,10 +59,10 @@ def _direct_search(
             rows = cursor.fetchall()
             cursor.execute(
                 f"""SELECT COUNT(*) AS count
-                FROM {index}
-                WHERE message @@ %s
-                  AND event_time >= %s
-                  AND event_time < %s
+                FROM {table}
+                WHERE line_id IN (SELECT line_id FROM {index} WHERE message @@ %s)
+                  AND event_time >= %t
+                  AND event_time < %t
                   AND component = %s
                   AND severity = %s""",
                 (text, start_time, end_time, component, severity),
