@@ -9,15 +9,15 @@ DROP TABLE IF EXISTS openstack_anomalous_instances;
 DROP TABLE IF EXISTS ownership;
 DROP TEXT SEARCH DICTIONARY IF EXISTS log_dict;
 
--- Log messages are mostly ASCII words, hex values and IDs. Lower-case, no
--- stemming, so "error" and "errors" stay distinct. position enables phrase
--- search, frequency enables relevance scoring. (SereneDB 26.09 syntax.)
+-- Log messages are ASCII words joined by dots, colons, slashes and underscores
+-- (exception.InvalidDiskInfo, nova.virt.libvirt, R02-M1-N0-C:J12-U11). The
+-- 'text' template keeps such runs as one token, so a search for "libvirt" would
+-- miss them; split_by_non_alpha cuts at every non-alphanumeric byte instead.
+-- Lower-cased, no stemming. position enables phrase search, frequency scoring.
+-- (SereneDB 26.09 syntax.)
 CREATE TEXT SEARCH DICTIONARY log_dict (
-    template = 'text',
-    locale = 'en_US.UTF-8',
+    template = 'split_by_non_alpha',
     case = 'lower',
-    stemming = false,
-    accent = false,
     frequency = true,
     position = true
 );

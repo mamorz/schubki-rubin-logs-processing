@@ -1,0 +1,2990 @@
+{
+  "server": "PostgreSQL 18.3 (SereneDB 26.09.1.3)",
+  "cases": [
+    {
+      "query": "corpus_overview",
+      "scope": "whole base corpus, no filters",
+      "sql": "SELECT 'bgl' AS dataset, count(*) AS lines, min(ts) AS first_ts, max(ts) AS last_ts,\n       count(*) FILTER (WHERE is_alert) AS problem_lines, 'alert-labelled lines' AS problem_definition,\n       count(DISTINCT component) AS components, count(DISTINCT node) AS nodes_or_instances\nFROM bgl_logs\nUNION ALL\nSELECT 'openstack', count(*), min(ts), max(ts),\n       count(*) FILTER (WHERE level <> 'INFO'), 'WARNING/ERROR/CRITICAL lines',\n       count(DISTINCT component), count(DISTINCT instance_id)\nFROM openstack_logs",
+      "params": {},
+      "row_count": 2,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 45.8,
+      "rows": [
+        {
+          "dataset": "bgl",
+          "lines": 4747963,
+          "first_ts": "2005-06-03 15:42:50.363779",
+          "last_ts": "2006-01-04 08:00:05.233639",
+          "problem_lines": 348460,
+          "problem_definition": "alert-labelled lines",
+          "components": 10,
+          "nodes_or_instances": 69251
+        },
+        {
+          "dataset": "openstack",
+          "lines": 207820,
+          "first_ts": "2017-05-14 19:39:01.445000",
+          "last_ts": "2017-05-17 12:02:35.320000",
+          "problem_lines": 3314,
+          "problem_definition": "WARNING/ERROR/CRITICAL lines",
+          "components": 12,
+          "nodes_or_instances": 2069
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "corpus_overview",
+      "role": "all",
+      "question": "How big is the base corpus and how many problem lines does each dataset have?"
+    },
+    {
+      "query": "search_logs",
+      "scope": "bgl: full-text 'parity', ts >= 2005-09-01, ts < 2005-10-01",
+      "sql": "SELECT l.line_no, l.ts, l.node, l.alert_label, l.component, l.level, l.message\nFROM bgl_logs_idx l\nWHERE l.message @@ websearch_to_tsquery(%(text)s) AND l.ts >= %(start)s AND l.ts < %(end)s\nORDER BY l.ts, l.line_no\nLIMIT %(limit)s;\n\nSELECT count(*) AS total_matches\nFROM bgl_logs_idx l\nWHERE l.message @@ websearch_to_tsquery(%(text)s) AND l.ts >= %(start)s AND l.ts < %(end)s",
+      "params": {
+        "text": "parity",
+        "start": "2005-09-01",
+        "end": "2005-10-01",
+        "limit": 5
+      },
+      "row_count": 5,
+      "total_available": 485,
+      "truncated": true,
+      "elapsed_ms": 6.3,
+      "rows": [
+        {
+          "line_no": 3313795,
+          "ts": "2005-09-01 06:48:29.689394",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "i-cache parity error..............0"
+        },
+        {
+          "line_no": 3313796,
+          "ts": "2005-09-01 06:48:29.850013",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "d-cache search parity error.......1"
+        },
+        {
+          "line_no": 3313797,
+          "ts": "2005-09-01 06:48:30.027327",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "d-cache flush parity error........0"
+        },
+        {
+          "line_no": 3315333,
+          "ts": "2005-09-01 12:14:37.428782",
+          "node": "R26-M1-N8-C:J09-U11",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "INFO",
+          "message": "instruction cache parity error corrected"
+        },
+        {
+          "line_no": 3315699,
+          "ts": "2005-09-02 05:33:59.725692",
+          "node": "R55-M0-N0-C:J14-U01",
+          "alert_label": "KERNMC",
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "machine check interrupt (bit=0x1d): L2 dcache unit data parity error"
+        }
+      ],
+      "uses_fulltext_index": true,
+      "case": "search_bgl_parity",
+      "role": "engineer",
+      "question": "Where do cache parity errors occur in September 2005?"
+    },
+    {
+      "query": "search_logs",
+      "scope": "bgl: full-text '\"data TLB error interrupt\"', alerts only",
+      "sql": "SELECT l.line_no, l.ts, l.node, l.alert_label, l.component, l.level, l.message\nFROM bgl_logs_idx l\nWHERE l.message @@ websearch_to_tsquery(%(text)s) AND l.is_alert\nORDER BY l.ts, l.line_no\nLIMIT %(limit)s;\n\nSELECT count(*) AS total_matches\nFROM bgl_logs_idx l\nWHERE l.message @@ websearch_to_tsquery(%(text)s) AND l.is_alert",
+      "params": {
+        "text": "\"data TLB error interrupt\"",
+        "limit": 5
+      },
+      "row_count": 5,
+      "total_available": 152734,
+      "truncated": true,
+      "elapsed_ms": 14.4,
+      "rows": [
+        {
+          "line_no": 17742,
+          "ts": "2005-06-05 00:08:13.410695",
+          "node": "R20-M0-N2-C:J10-U11",
+          "alert_label": "KERNDTLB",
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "data TLB error interrupt"
+        },
+        {
+          "line_no": 17745,
+          "ts": "2005-06-05 00:08:13.577322",
+          "node": "R20-M0-N2-C:J14-U01",
+          "alert_label": "KERNDTLB",
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "data TLB error interrupt"
+        },
+        {
+          "line_no": 17758,
+          "ts": "2005-06-05 00:08:13.959099",
+          "node": "R20-M0-ND-C:J13-U11",
+          "alert_label": "KERNDTLB",
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "data TLB error interrupt"
+        },
+        {
+          "line_no": 17809,
+          "ts": "2005-06-05 00:08:15.474037",
+          "node": "R20-M0-N9-C:J14-U01",
+          "alert_label": "KERNDTLB",
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "data TLB error interrupt"
+        },
+        {
+          "line_no": 17855,
+          "ts": "2005-06-05 00:08:16.806826",
+          "node": "R20-M1-N2-C:J17-U11",
+          "alert_label": "KERNDTLB",
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "data TLB error interrupt"
+        }
+      ],
+      "uses_fulltext_index": true,
+      "case": "search_bgl_phrase_alerts",
+      "role": "engineer",
+      "question": "Which alert lines report a data TLB error interrupt?"
+    },
+    {
+      "query": "search_logs",
+      "scope": "openstack: full-text 'InvalidDiskInfo', level = 'ERROR'",
+      "sql": "SELECT l.source_file, l.line_no, l.ts, l.service, l.component, l.level, l.request_id, l.instance_id, l.message\nFROM openstack_logs_idx l\nWHERE l.message @@ websearch_to_tsquery(%(text)s) AND l.level = %(level)s\nORDER BY l.ts, l.line_no\nLIMIT %(limit)s;\n\nSELECT count(*) AS total_matches\nFROM openstack_logs_idx l\nWHERE l.message @@ websearch_to_tsquery(%(text)s) AND l.level = %(level)s",
+      "params": {
+        "text": "InvalidDiskInfo",
+        "level": "ERROR",
+        "limit": 10
+      },
+      "row_count": 10,
+      "total_available": 16,
+      "truncated": true,
+      "elapsed_ms": 7.7,
+      "rows": [
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27196,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    raise exception.InvalidDiskInfo(reason=msg)"
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27197,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "InvalidDiskInfo: Disk info file is invalid: qemu-img failed to execute on /var/lib/nova/instances/16797a0f-32fb-494c-8f36-38588148c35d/disk : Unexpected error while running command."
+        },
+        {
+          "source_file": "openstack_normal2",
+          "line_no": 10159,
+          "ts": "2017-05-16 16:30:35.360000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    raise exception.InvalidDiskInfo(reason=msg)"
+        },
+        {
+          "source_file": "openstack_normal2",
+          "line_no": 10160,
+          "ts": "2017-05-16 16:30:35.360000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "InvalidDiskInfo: Disk info file is invalid: qemu-img failed to execute on /var/lib/nova/instances/daf38630-e1ca-42b1-8b71-4df078076a47/disk : Unexpected error while running command."
+        },
+        {
+          "source_file": "openstack_normal2",
+          "line_no": 19731,
+          "ts": "2017-05-16 17:41:20.577000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    raise exception.InvalidDiskInfo(reason=msg)"
+        },
+        {
+          "source_file": "openstack_normal2",
+          "line_no": 19732,
+          "ts": "2017-05-16 17:41:20.577000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "InvalidDiskInfo: Disk info file is invalid: qemu-img failed to execute on /var/lib/nova/instances/74e32610-53a0-4e61-9125-83f6edc60a90/disk : Unexpected error while running command."
+        },
+        {
+          "source_file": "openstack_normal2",
+          "line_no": 34826,
+          "ts": "2017-05-16 19:33:00.935000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    raise exception.InvalidDiskInfo(reason=msg)"
+        },
+        {
+          "source_file": "openstack_normal2",
+          "line_no": 34827,
+          "ts": "2017-05-16 19:33:00.935000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "InvalidDiskInfo: Disk info file is invalid: qemu-img failed to execute on /var/lib/nova/instances/ac7c329c-1a20-4735-bf9a-b15102f1c44d/disk : Unexpected error while running command."
+        },
+        {
+          "source_file": "openstack_normal2",
+          "line_no": 42744,
+          "ts": "2017-05-16 20:31:45.820000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    raise exception.InvalidDiskInfo(reason=msg)"
+        },
+        {
+          "source_file": "openstack_normal2",
+          "line_no": 42745,
+          "ts": "2017-05-16 20:31:45.820000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "InvalidDiskInfo: Disk info file is invalid: qemu-img failed to execute on /var/lib/nova/instances/0c28eea9-14ec-4f20-ad24-1cf8a2c5975d/disk : Unexpected error while running command."
+        }
+      ],
+      "uses_fulltext_index": true,
+      "case": "search_openstack_disk_error",
+      "role": "engineer",
+      "question": "Which nova-compute errors mention an invalid disk?"
+    },
+    {
+      "query": "nearby_events",
+      "scope": "openstack: lines 27188..27204 of openstack_normal1",
+      "sql": "WITH a AS (SELECT source_file, line_no FROM openstack_logs a WHERE a.line_no = %(line_no)s AND a.source_file = %(source_file)s)\nSELECT l.source_file, l.line_no, l.ts, l.service, l.component, l.level, l.request_id, l.instance_id, l.message, l.line_no - a.line_no AS offset_lines\nFROM openstack_logs l, a\nWHERE l.line_no BETWEEN %(lo)s AND %(hi)s AND l.source_file = a.source_file\nORDER BY l.line_no",
+      "params": {
+        "line_no": 27196,
+        "source_file": "openstack_normal1",
+        "lo": 27188,
+        "hi": 27204
+      },
+      "row_count": 17,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 4.1,
+      "rows": [
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27188,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    self._age_and_verify_cached_images(context, all_instances, base_dir)",
+          "offset_lines": -8
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27189,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "  File \"/usr/lib/python2.7/dist-packages/nova/virt/libvirt/imagecache.py\", line 610, in _age_and_verify_cached_images",
+          "offset_lines": -7
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27190,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    inuse_backing_images = self._list_backing_images()",
+          "offset_lines": -6
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27191,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "  File \"/usr/lib/python2.7/dist-packages/nova/virt/libvirt/imagecache.py\", line 309, in _list_backing_images",
+          "offset_lines": -5
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27192,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    disk_path)",
+          "offset_lines": -4
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27193,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "  File \"/usr/lib/python2.7/dist-packages/nova/virt/libvirt/utils.py\", line 184, in get_disk_backing_file",
+          "offset_lines": -3
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27194,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    backing_file = images.qemu_img_info(path, format).backing_file",
+          "offset_lines": -2
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27195,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "  File \"/usr/lib/python2.7/dist-packages/nova/virt/images.py\", line 65, in qemu_img_info",
+          "offset_lines": -1
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27196,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "    raise exception.InvalidDiskInfo(reason=msg)",
+          "offset_lines": 0
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27197,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "InvalidDiskInfo: Disk info file is invalid: qemu-img failed to execute on /var/lib/nova/instances/16797a0f-32fb-494c-8f36-38588148c35d/disk : Unexpected error while running command.",
+          "offset_lines": 1
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27198,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "Command: /usr/bin/python -m oslo_concurrency.prlimit --as=1073741824 --cpu=2 -- env LC_ALL=C LANG=C qemu-img info /var/lib/nova/instances/16797a0f-32fb-494c-8f36-38588148c35d/disk",
+          "offset_lines": 2
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27199,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "Exit code: 1",
+          "offset_lines": 3
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27200,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "Stdout: u''",
+          "offset_lines": 4
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27201,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "Stderr: u\"qemu-img: Could not open '/var/lib/nova/instances/16797a0f-32fb-494c-8f36-38588148c35d/disk': Could not open '/var/lib/nova/instances/16797a0f-32fb-494c-8f36-38588148c35d/disk': No such file or directory\\n\"",
+          "offset_lines": 5
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27202,
+          "ts": "2017-05-16 03:19:45.356000",
+          "service": "nova-compute",
+          "component": "oslo_service.periodic_task",
+          "level": "ERROR",
+          "request_id": null,
+          "instance_id": null,
+          "message": "",
+          "offset_lines": 6
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27203,
+          "ts": "2017-05-16 03:19:45.456000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-49bcaa6b-c5ba-49ac-9bb8-d28d2fa9bbaf",
+          "instance_id": "16797a0f-32fb-494c-8f36-38588148c35d",
+          "message": "[instance: 16797a0f-32fb-494c-8f36-38588148c35d] Took 1.05 seconds to destroy the instance on the hypervisor.",
+          "offset_lines": 7
+        },
+        {
+          "source_file": "openstack_normal1",
+          "line_no": 27204,
+          "ts": "2017-05-16 03:19:45.826000",
+          "service": "nova-api",
+          "component": "nova.osapi_compute.wsgi.server",
+          "level": "INFO",
+          "request_id": "req-bba84199-2573-4c5f-a8a3-ba41792ff12a",
+          "instance_id": null,
+          "message": "10.11.10.1 \"GET /v2/54fadb412c4e40cdbaed9335e4c35a9e/servers/detail HTTP/1.1\" status: 200 len: 1874 time: 0.2014279",
+          "offset_lines": 8
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "nearby_openstack_disk_error",
+      "role": "engineer",
+      "question": "What happened just before and after the first InvalidDiskInfo error?"
+    },
+    {
+      "query": "nearby_events",
+      "scope": "bgl: node of line 3313795, +/- 3600s, 5 before / 5 after",
+      "sql": "WITH a AS (SELECT line_no, ts, node FROM bgl_logs a WHERE a.line_no = %(line_no)s),\nw AS (\n  SELECT l.line_no, l.ts, l.node, l.alert_label, l.component, l.level, l.message, l.line_no - a.line_no AS offset_lines,\n         row_number() OVER (PARTITION BY sign(l.line_no - a.line_no)\n                            ORDER BY abs(l.line_no - a.line_no)) AS rn\n  FROM bgl_logs l, a\n  WHERE l.node = a.node\n    AND l.ts BETWEEN a.ts - to_seconds(%(window)s) AND a.ts + to_seconds(%(window)s))\nSELECT * EXCLUDE (rn) FROM w\nWHERE offset_lines = 0 OR (offset_lines < 0 AND rn <= %(before)s)\n   OR (offset_lines > 0 AND rn <= %(after)s)\nORDER BY line_no",
+      "params": {
+        "line_no": 3313795,
+        "window": 3600,
+        "before": 5,
+        "after": 5
+      },
+      "row_count": 11,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 5.4,
+      "rows": [
+        {
+          "line_no": 3313790,
+          "ts": "2005-09-01 06:48:28.822704",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "summary...........................1",
+          "offset_lines": -5
+        },
+        {
+          "line_no": 3313791,
+          "ts": "2005-09-01 06:48:28.981181",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "instruction plb error.............0",
+          "offset_lines": -4
+        },
+        {
+          "line_no": 3313792,
+          "ts": "2005-09-01 06:48:29.136532",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "data read plb error...............0",
+          "offset_lines": -3
+        },
+        {
+          "line_no": 3313793,
+          "ts": "2005-09-01 06:48:29.363970",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "data write plb error..............0",
+          "offset_lines": -2
+        },
+        {
+          "line_no": 3313794,
+          "ts": "2005-09-01 06:48:29.521052",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "tlb error.........................0",
+          "offset_lines": -1
+        },
+        {
+          "line_no": 3313795,
+          "ts": "2005-09-01 06:48:29.689394",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "i-cache parity error..............0",
+          "offset_lines": 0
+        },
+        {
+          "line_no": 3313796,
+          "ts": "2005-09-01 06:48:29.850013",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "d-cache search parity error.......1",
+          "offset_lines": 1
+        },
+        {
+          "line_no": 3313797,
+          "ts": "2005-09-01 06:48:30.027327",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "d-cache flush parity error........0",
+          "offset_lines": 2
+        },
+        {
+          "line_no": 3313798,
+          "ts": "2005-09-01 06:48:30.193586",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "imprecise machine check...........0",
+          "offset_lines": 3
+        },
+        {
+          "line_no": 3313799,
+          "ts": "2005-09-01 06:48:30.354550",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "machine state register: 0x0002f900",
+          "offset_lines": 4
+        },
+        {
+          "line_no": 3313800,
+          "ts": "2005-09-01 06:48:30.523984",
+          "node": "R03-M0-N2-C:J17-U01",
+          "alert_label": null,
+          "component": "KERNEL",
+          "level": "FATAL",
+          "message": "wait state enable.................0",
+          "offset_lines": 5
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "nearby_bgl_same_node",
+      "role": "engineer",
+      "question": "What else happened on the node of the first September parity alert?"
+    },
+    {
+      "query": "instance_timeline",
+      "scope": "openstack: instance_id = '544fd51c-4edc-4780-baae-ba1d80a0acfc'",
+      "sql": "SELECT l.source_file, l.line_no, l.ts, l.service, l.component, l.level, l.request_id, l.instance_id, l.message,\n       l.is_anomaly, count(*) OVER () AS total_matches\nFROM openstack_logs l\nWHERE l.instance_id = %(instance_id)s\nORDER BY l.ts, l.source_file, l.line_no\nLIMIT %(limit)s",
+      "params": {
+        "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+        "limit": 30
+      },
+      "row_count": 25,
+      "total_available": 25,
+      "truncated": false,
+      "elapsed_ms": 2.1,
+      "rows": [
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11901,
+          "ts": "2017-05-14 21:07:37.102000",
+          "service": "nova-compute",
+          "component": "nova.compute.claims",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Attempting claim: memory 2048 MB, disk 20 GB, vcpus 1 CPU",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11902,
+          "ts": "2017-05-14 21:07:37.103000",
+          "service": "nova-compute",
+          "component": "nova.compute.claims",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Total memory: 64172 MB, used: 512.00 MB",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11903,
+          "ts": "2017-05-14 21:07:37.103000",
+          "service": "nova-compute",
+          "component": "nova.compute.claims",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] memory limit: 96258.00 MB, free: 95746.00 MB",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11904,
+          "ts": "2017-05-14 21:07:37.104000",
+          "service": "nova-compute",
+          "component": "nova.compute.claims",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Total disk: 15 GB, used: 0.00 GB",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11905,
+          "ts": "2017-05-14 21:07:37.105000",
+          "service": "nova-compute",
+          "component": "nova.compute.claims",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] disk limit not specified, defaulting to unlimited",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11906,
+          "ts": "2017-05-14 21:07:37.105000",
+          "service": "nova-compute",
+          "component": "nova.compute.claims",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Total vcpu: 16 VCPU, used: 0.00 VCPU",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11907,
+          "ts": "2017-05-14 21:07:37.106000",
+          "service": "nova-compute",
+          "component": "nova.compute.claims",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] vcpu limit not specified, defaulting to unlimited",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11908,
+          "ts": "2017-05-14 21:07:37.138000",
+          "service": "nova-compute",
+          "component": "nova.compute.claims",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Claim successful",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11911,
+          "ts": "2017-05-14 21:07:37.924000",
+          "service": "nova-compute",
+          "component": "nova.virt.libvirt.driver",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Creating image",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11960,
+          "ts": "2017-05-14 21:08:12.571000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-3ea4052c-895d-4b64-9e2d-04d64c4d94ab",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] VM Started (Lifecycle Event)",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11961,
+          "ts": "2017-05-14 21:08:12.636000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-3ea4052c-895d-4b64-9e2d-04d64c4d94ab",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] VM Paused (Lifecycle Event)",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11962,
+          "ts": "2017-05-14 21:08:12.757000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-3ea4052c-895d-4b64-9e2d-04d64c4d94ab",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] During sync_power_state the instance has a pending task (spawning). Skip.",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11978,
+          "ts": "2017-05-14 21:08:19.729000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-3ea4052c-895d-4b64-9e2d-04d64c4d94ab",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] VM Resumed (Lifecycle Event)",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11979,
+          "ts": "2017-05-14 21:08:19.735000",
+          "service": "nova-compute",
+          "component": "nova.virt.libvirt.driver",
+          "level": "INFO",
+          "request_id": null,
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Instance spawned successfully.",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11980,
+          "ts": "2017-05-14 21:08:19.736000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Took 41.81 seconds to spawn the instance on the hypervisor.",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11981,
+          "ts": "2017-05-14 21:08:19.873000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-3ea4052c-895d-4b64-9e2d-04d64c4d94ab",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] During sync_power_state the instance has a pending task (spawning). Skip.",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11982,
+          "ts": "2017-05-14 21:08:19.874000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-3ea4052c-895d-4b64-9e2d-04d64c4d94ab",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] VM Resumed (Lifecycle Event)",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 11983,
+          "ts": "2017-05-14 21:08:19.900000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-d6143bd4-9784-4e95-a0c8-83fba00530b6",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Took 42.81 seconds to build instance.",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 12005,
+          "ts": "2017-05-14 21:08:27.296000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-483e1cca-e99f-4342-bee7-8b1c7a6b36e1",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Terminating instance",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 12007,
+          "ts": "2017-05-14 21:08:27.511000",
+          "service": "nova-compute",
+          "component": "nova.virt.libvirt.driver",
+          "level": "INFO",
+          "request_id": null,
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Instance destroyed successfully.",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 12009,
+          "ts": "2017-05-14 21:08:28.178000",
+          "service": "nova-compute",
+          "component": "nova.virt.libvirt.driver",
+          "level": "INFO",
+          "request_id": "req-483e1cca-e99f-4342-bee7-8b1c7a6b36e1",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Deleting instance files /var/lib/nova/instances/544fd51c-4edc-4780-baae-ba1d80a0acfc_del",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 12010,
+          "ts": "2017-05-14 21:08:28.179000",
+          "service": "nova-compute",
+          "component": "nova.virt.libvirt.driver",
+          "level": "INFO",
+          "request_id": "req-483e1cca-e99f-4342-bee7-8b1c7a6b36e1",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Deletion of /var/lib/nova/instances/544fd51c-4edc-4780-baae-ba1d80a0acfc_del complete",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 12011,
+          "ts": "2017-05-14 21:08:28.299000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-483e1cca-e99f-4342-bee7-8b1c7a6b36e1",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Took 1.00 seconds to destroy the instance on the hypervisor.",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 12013,
+          "ts": "2017-05-14 21:08:28.836000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": "req-483e1cca-e99f-4342-bee7-8b1c7a6b36e1",
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] Took 0.54 seconds to deallocate network for instance.",
+          "is_anomaly": true
+        },
+        {
+          "source_file": "openstack_abnormal",
+          "line_no": 12035,
+          "ts": "2017-05-14 21:08:42.508000",
+          "service": "nova-compute",
+          "component": "nova.compute.manager",
+          "level": "INFO",
+          "request_id": null,
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "message": "[instance: 544fd51c-4edc-4780-baae-ba1d80a0acfc] VM Stopped (Lifecycle Event)",
+          "is_anomaly": true
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "instance_timeline_anomalous",
+      "role": "engineer",
+      "question": "What is the full log history of anomalous instance 544fd51c-...?"
+    },
+    {
+      "query": "count_by",
+      "scope": "bgl: alerts only",
+      "sql": "SELECT o.team AS team, count(*) AS lines,\n       round(100.0 * count(*) / sum(count(*)) OVER (), 2) AS pct,\n       min(l.ts) AS first_seen, max(l.ts) AS last_seen,\n       count(*) OVER () AS total_groups\nFROM bgl_logs l\nLEFT JOIN ownership o ON o.dataset = 'bgl' AND o.component = l.component\nWHERE l.is_alert\nGROUP BY 1\nORDER BY lines DESC\nLIMIT %(limit)s",
+      "params": {
+        "limit": 50
+      },
+      "row_count": 4,
+      "total_available": 4,
+      "truncated": false,
+      "elapsed_ms": 5.4,
+      "rows": [
+        {
+          "team": "Compute Kernel",
+          "lines": 284344,
+          "pct": 81.6,
+          "first_seen": "2005-06-05 00:08:13.410695",
+          "last_seen": "2006-01-04 08:00:05.233639"
+        },
+        {
+          "team": "HPC Applications",
+          "lines": 63845,
+          "pct": 18.32,
+          "first_seen": "2005-06-04 00:24:32.398284",
+          "last_seen": "2006-01-03 11:56:38.877831"
+        },
+        {
+          "team": "Hardware & Interconnect",
+          "lines": 221,
+          "pct": 0.06,
+          "first_seen": "2005-06-28 14:28:25.882436",
+          "last_seen": "2005-12-08 18:10:50.536792"
+        },
+        {
+          "team": "Cluster Control",
+          "lines": 50,
+          "pct": 0.01,
+          "first_seen": "2005-06-28 13:53:21.974236",
+          "last_seen": "2005-12-07 23:15:21.508320"
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "count_bgl_alerts_by_team",
+      "role": "team lead",
+      "question": "Which teams own the BGL alert lines (whole dataset)?"
+    },
+    {
+      "query": "count_by",
+      "scope": "bgl: alerts only",
+      "sql": "SELECT coalesce(l.alert_label, '(no alert)') AS alert_label, count(*) AS lines,\n       round(100.0 * count(*) / sum(count(*)) OVER (), 2) AS pct,\n       min(l.ts) AS first_seen, max(l.ts) AS last_seen,\n       count(*) OVER () AS total_groups\nFROM bgl_logs l\nLEFT JOIN ownership o ON o.dataset = 'bgl' AND o.component = l.component\nWHERE l.is_alert\nGROUP BY 1\nORDER BY lines DESC\nLIMIT %(limit)s",
+      "params": {
+        "limit": 15
+      },
+      "row_count": 15,
+      "total_available": 41,
+      "truncated": true,
+      "elapsed_ms": 5.5,
+      "rows": [
+        {
+          "alert_label": "KERNDTLB",
+          "lines": 152734,
+          "pct": 43.83,
+          "first_seen": "2005-06-05 00:08:13.410695",
+          "last_seen": "2005-11-28 10:01:47.587002"
+        },
+        {
+          "alert_label": "KERNSTOR",
+          "lines": 63491,
+          "pct": 18.22,
+          "first_seen": "2005-06-13 17:36:20.973743",
+          "last_seen": "2005-11-22 14:52:43.442135"
+        },
+        {
+          "alert_label": "APPSEV",
+          "lines": 49651,
+          "pct": 14.25,
+          "first_seen": "2005-07-20 11:54:27.005995",
+          "last_seen": "2006-01-03 11:56:38.877831"
+        },
+        {
+          "alert_label": "KERNMNTF",
+          "lines": 31531,
+          "pct": 9.05,
+          "first_seen": "2005-08-03 15:35:34.555500",
+          "last_seen": "2006-01-03 13:11:16.422700"
+        },
+        {
+          "alert_label": "KERNTERM",
+          "lines": 23338,
+          "pct": 6.7,
+          "first_seen": "2005-07-01 16:22:09.547622",
+          "last_seen": "2005-11-16 12:37:18.653547"
+        },
+        {
+          "alert_label": "KERNREC",
+          "lines": 6145,
+          "pct": 1.76,
+          "first_seen": "2005-10-28 13:00:07.036731",
+          "last_seen": "2005-12-17 12:03:45.529970"
+        },
+        {
+          "alert_label": "APPREAD",
+          "lines": 5983,
+          "pct": 1.72,
+          "first_seen": "2005-06-04 00:24:32.398284",
+          "last_seen": "2005-06-20 01:42:45.024863"
+        },
+        {
+          "alert_label": "KERNRTSP",
+          "lines": 3983,
+          "pct": 1.14,
+          "first_seen": "2005-06-05 01:55:06.697467",
+          "last_seen": "2006-01-03 03:25:05.504039"
+        },
+        {
+          "alert_label": "APPRES",
+          "lines": 2370,
+          "pct": 0.68,
+          "first_seen": "2005-08-05 09:11:59.623435",
+          "last_seen": "2005-11-21 16:05:26.030461"
+        },
+        {
+          "alert_label": "APPUNAV",
+          "lines": 2048,
+          "pct": 0.59,
+          "first_seen": "2005-07-05 12:22:22.994592",
+          "last_seen": "2005-08-15 11:54:04.748324"
+        },
+        {
+          "alert_label": "APPTO",
+          "lines": 1991,
+          "pct": 0.57,
+          "first_seen": "2005-11-21 11:06:58.577919",
+          "last_seen": "2005-11-21 15:01:06.171257"
+        },
+        {
+          "alert_label": "KERNMICRO",
+          "lines": 1503,
+          "pct": 0.43,
+          "first_seen": "2005-08-03 16:38:58.627303",
+          "last_seen": "2005-10-19 07:47:33.765395"
+        },
+        {
+          "alert_label": "APPOUT",
+          "lines": 816,
+          "pct": 0.23,
+          "first_seen": "2005-12-11 19:19:07.835041",
+          "last_seen": "2005-12-11 19:21:57.621244"
+        },
+        {
+          "alert_label": "KERNMNT",
+          "lines": 720,
+          "pct": 0.21,
+          "first_seen": "2005-08-03 15:13:52.683099",
+          "last_seen": "2005-08-31 04:17:04.869168"
+        },
+        {
+          "alert_label": "APPBUSY",
+          "lines": 512,
+          "pct": 0.15,
+          "first_seen": "2005-07-09 04:33:59.105257",
+          "last_seen": "2005-07-09 04:34:13.804475"
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "count_bgl_alerts_by_label",
+      "role": "team lead",
+      "question": "Which BGL alert categories recur most?"
+    },
+    {
+      "query": "count_by",
+      "scope": "openstack: level = 'WARNING'",
+      "sql": "SELECT o.team AS team, count(*) AS lines,\n       round(100.0 * count(*) / sum(count(*)) OVER (), 2) AS pct,\n       min(l.ts) AS first_seen, max(l.ts) AS last_seen,\n       count(*) OVER () AS total_groups\nFROM openstack_logs l\nLEFT JOIN ownership o ON o.dataset = 'openstack' AND o.component = l.component\nWHERE l.level = %(level)s\nGROUP BY 1\nORDER BY lines DESC\nLIMIT %(limit)s",
+      "params": {
+        "level": "WARNING",
+        "limit": 50
+      },
+      "row_count": 2,
+      "total_available": 2,
+      "truncated": false,
+      "elapsed_ms": 2.0,
+      "rows": [
+        {
+          "team": "Virtualization",
+          "lines": 3116,
+          "pct": 99.94,
+          "first_seen": "2017-05-14 19:39:09.660000",
+          "last_seen": "2017-05-17 06:24:35.572000"
+        },
+        {
+          "team": "Cloud API",
+          "lines": 2,
+          "pct": 0.06,
+          "first_seen": "2017-05-16 06:25:02.868000",
+          "last_seen": "2017-05-17 06:25:03.045000"
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "count_openstack_by_team_level",
+      "role": "team lead",
+      "question": "How are OpenStack WARNING lines spread across teams?"
+    },
+    {
+      "query": "trend",
+      "scope": "bgl: alerts only, per week",
+      "sql": "SELECT date_trunc('week', l.ts) AS bucket, o.team AS team, count(*) AS lines\nFROM bgl_logs l\nLEFT JOIN ownership o ON o.dataset = 'bgl' AND o.component = l.component\nWHERE l.is_alert\nGROUP BY ALL\nORDER BY 1, 3 DESC\nLIMIT %(limit)s",
+      "params": {
+        "limit": 200
+      },
+      "row_count": 85,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 4.9,
+      "rows": [
+        {
+          "bucket": "2005-05-30 00:00:00",
+          "team": "HPC Applications",
+          "lines": 2040
+        },
+        {
+          "bucket": "2005-05-30 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 569
+        },
+        {
+          "bucket": "2005-06-06 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 152225
+        },
+        {
+          "bucket": "2005-06-06 00:00:00",
+          "team": "HPC Applications",
+          "lines": 124
+        },
+        {
+          "bucket": "2005-06-13 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 65735
+        },
+        {
+          "bucket": "2005-06-13 00:00:00",
+          "team": "HPC Applications",
+          "lines": 3057
+        },
+        {
+          "bucket": "2005-06-20 00:00:00",
+          "team": "HPC Applications",
+          "lines": 1162
+        },
+        {
+          "bucket": "2005-06-20 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 10
+        },
+        {
+          "bucket": "2005-06-27 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 747
+        },
+        {
+          "bucket": "2005-06-27 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 24
+        },
+        {
+          "bucket": "2005-06-27 00:00:00",
+          "team": "Cluster Control",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-07-04 00:00:00",
+          "team": "HPC Applications",
+          "lines": 1537
+        },
+        {
+          "bucket": "2005-07-04 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 708
+        },
+        {
+          "bucket": "2005-07-04 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 6
+        },
+        {
+          "bucket": "2005-07-11 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 1904
+        },
+        {
+          "bucket": "2005-07-11 00:00:00",
+          "team": "Cluster Control",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-07-18 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 1887
+        },
+        {
+          "bucket": "2005-07-18 00:00:00",
+          "team": "HPC Applications",
+          "lines": 39
+        },
+        {
+          "bucket": "2005-07-25 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 103
+        },
+        {
+          "bucket": "2005-07-25 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 2
+        },
+        {
+          "bucket": "2005-07-25 00:00:00",
+          "team": "Cluster Control",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-08-01 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 681
+        },
+        {
+          "bucket": "2005-08-01 00:00:00",
+          "team": "HPC Applications",
+          "lines": 577
+        },
+        {
+          "bucket": "2005-08-01 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 4
+        },
+        {
+          "bucket": "2005-08-01 00:00:00",
+          "team": "Cluster Control",
+          "lines": 4
+        },
+        {
+          "bucket": "2005-08-08 00:00:00",
+          "team": "HPC Applications",
+          "lines": 3112
+        },
+        {
+          "bucket": "2005-08-08 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 1559
+        },
+        {
+          "bucket": "2005-08-08 00:00:00",
+          "team": "Cluster Control",
+          "lines": 12
+        },
+        {
+          "bucket": "2005-08-08 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 6
+        },
+        {
+          "bucket": "2005-08-15 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 8002
+        },
+        {
+          "bucket": "2005-08-15 00:00:00",
+          "team": "HPC Applications",
+          "lines": 2084
+        },
+        {
+          "bucket": "2005-08-15 00:00:00",
+          "team": "Cluster Control",
+          "lines": 5
+        },
+        {
+          "bucket": "2005-08-22 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 3675
+        },
+        {
+          "bucket": "2005-08-22 00:00:00",
+          "team": "HPC Applications",
+          "lines": 2571
+        },
+        {
+          "bucket": "2005-08-22 00:00:00",
+          "team": "Cluster Control",
+          "lines": 2
+        },
+        {
+          "bucket": "2005-08-29 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 16266
+        },
+        {
+          "bucket": "2005-08-29 00:00:00",
+          "team": "HPC Applications",
+          "lines": 697
+        },
+        {
+          "bucket": "2005-08-29 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 146
+        },
+        {
+          "bucket": "2005-08-29 00:00:00",
+          "team": "Cluster Control",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-09-05 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 9039
+        },
+        {
+          "bucket": "2005-09-05 00:00:00",
+          "team": "HPC Applications",
+          "lines": 1973
+        },
+        {
+          "bucket": "2005-09-05 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 6
+        },
+        {
+          "bucket": "2005-09-12 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 3646
+        },
+        {
+          "bucket": "2005-09-12 00:00:00",
+          "team": "HPC Applications",
+          "lines": 2803
+        },
+        {
+          "bucket": "2005-09-12 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 2
+        },
+        {
+          "bucket": "2005-09-19 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 574
+        },
+        {
+          "bucket": "2005-09-19 00:00:00",
+          "team": "HPC Applications",
+          "lines": 16
+        },
+        {
+          "bucket": "2005-09-19 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 3
+        },
+        {
+          "bucket": "2005-09-26 00:00:00",
+          "team": "HPC Applications",
+          "lines": 5048
+        },
+        {
+          "bucket": "2005-09-26 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 41
+        },
+        {
+          "bucket": "2005-10-03 00:00:00",
+          "team": "HPC Applications",
+          "lines": 1910
+        },
+        {
+          "bucket": "2005-10-03 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 155
+        },
+        {
+          "bucket": "2005-10-03 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 2
+        },
+        {
+          "bucket": "2005-10-10 00:00:00",
+          "team": "HPC Applications",
+          "lines": 1861
+        },
+        {
+          "bucket": "2005-10-10 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 954
+        },
+        {
+          "bucket": "2005-10-17 00:00:00",
+          "team": "HPC Applications",
+          "lines": 53
+        },
+        {
+          "bucket": "2005-10-17 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 43
+        },
+        {
+          "bucket": "2005-10-17 00:00:00",
+          "team": "Cluster Control",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-10-24 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 2749
+        },
+        {
+          "bucket": "2005-10-31 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 20
+        },
+        {
+          "bucket": "2005-10-31 00:00:00",
+          "team": "Cluster Control",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-11-07 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 4115
+        },
+        {
+          "bucket": "2005-11-07 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 6
+        },
+        {
+          "bucket": "2005-11-14 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 6366
+        },
+        {
+          "bucket": "2005-11-14 00:00:00",
+          "team": "HPC Applications",
+          "lines": 1567
+        },
+        {
+          "bucket": "2005-11-14 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 4
+        },
+        {
+          "bucket": "2005-11-21 00:00:00",
+          "team": "HPC Applications",
+          "lines": 13812
+        },
+        {
+          "bucket": "2005-11-21 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 188
+        },
+        {
+          "bucket": "2005-11-21 00:00:00",
+          "team": "Cluster Control",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-11-28 00:00:00",
+          "team": "HPC Applications",
+          "lines": 5624
+        },
+        {
+          "bucket": "2005-11-28 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 976
+        },
+        {
+          "bucket": "2005-11-28 00:00:00",
+          "team": "Cluster Control",
+          "lines": 16
+        },
+        {
+          "bucket": "2005-11-28 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 2
+        },
+        {
+          "bucket": "2005-12-05 00:00:00",
+          "team": "HPC Applications",
+          "lines": 1943
+        },
+        {
+          "bucket": "2005-12-05 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 152
+        },
+        {
+          "bucket": "2005-12-05 00:00:00",
+          "team": "Hardware & Interconnect",
+          "lines": 8
+        },
+        {
+          "bucket": "2005-12-05 00:00:00",
+          "team": "Cluster Control",
+          "lines": 4
+        },
+        {
+          "bucket": "2005-12-12 00:00:00",
+          "team": "HPC Applications",
+          "lines": 6849
+        },
+        {
+          "bucket": "2005-12-12 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 877
+        },
+        {
+          "bucket": "2005-12-19 00:00:00",
+          "team": "HPC Applications",
+          "lines": 1162
+        },
+        {
+          "bucket": "2005-12-19 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 22
+        },
+        {
+          "bucket": "2005-12-26 00:00:00",
+          "team": "HPC Applications",
+          "lines": 2094
+        },
+        {
+          "bucket": "2005-12-26 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 13
+        },
+        {
+          "bucket": "2006-01-02 00:00:00",
+          "team": "Compute Kernel",
+          "lines": 343
+        },
+        {
+          "bucket": "2006-01-02 00:00:00",
+          "team": "HPC Applications",
+          "lines": 130
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "trend_bgl_alerts_weekly_by_team",
+      "role": "team lead",
+      "question": "How do BGL alert lines develop week by week, per team?"
+    },
+    {
+      "query": "trend",
+      "scope": "bgl: alert_label = 'KERNDTLB', per day",
+      "sql": "SELECT date_trunc('day', l.ts) AS bucket, count(*) AS lines\nFROM bgl_logs l\nLEFT JOIN ownership o ON o.dataset = 'bgl' AND o.component = l.component\nWHERE l.alert_label = %(alert_label)s\nGROUP BY ALL\nORDER BY 1\nLIMIT %(limit)s",
+      "params": {
+        "alert_label": "KERNDTLB",
+        "limit": 60
+      },
+      "row_count": 11,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 2.5,
+      "rows": [
+        {
+          "bucket": "2005-06-05 00:00:00",
+          "lines": 477
+        },
+        {
+          "bucket": "2005-06-11 00:00:00",
+          "lines": 152182
+        },
+        {
+          "bucket": "2005-07-15 00:00:00",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-07-18 00:00:00",
+          "lines": 30
+        },
+        {
+          "bucket": "2005-08-15 00:00:00",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-08-16 00:00:00",
+          "lines": 8
+        },
+        {
+          "bucket": "2005-08-17 00:00:00",
+          "lines": 15
+        },
+        {
+          "bucket": "2005-08-18 00:00:00",
+          "lines": 5
+        },
+        {
+          "bucket": "2005-08-23 00:00:00",
+          "lines": 4
+        },
+        {
+          "bucket": "2005-11-24 00:00:00",
+          "lines": 1
+        },
+        {
+          "bucket": "2005-11-28 00:00:00",
+          "lines": 10
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "trend_bgl_kerndtlb_daily",
+      "role": "team lead",
+      "question": "On which days did KERNDTLB alerts occur?"
+    },
+    {
+      "query": "recurring_patterns",
+      "scope": "bgl: alerts only",
+      "sql": "SELECT regexp_replace(regexp_replace(l.message, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<uuid>', 'g'), '0x[0-9a-fA-F]+|\\b[0-9a-fA-F]*[0-9][0-9a-fA-F]*\\b', '<*>', 'g') AS pattern, l.component, o.team,\n       string_agg(DISTINCT l.level, ',') AS levels, count(*) AS lines, count(DISTINCT l.node) AS nodes,\n       count(DISTINCT l.ts::DATE) AS active_days, min(l.ts) AS first_seen, max(l.ts) AS last_seen,\n       count(*) OVER () AS total_patterns\nFROM bgl_logs l\nLEFT JOIN ownership o ON o.dataset = 'bgl' AND o.component = l.component\nWHERE l.is_alert\nGROUP BY 1, 2, 3\nORDER BY lines DESC\nLIMIT %(limit)s",
+      "params": {
+        "limit": 10
+      },
+      "row_count": 10,
+      "total_available": 2259,
+      "truncated": true,
+      "elapsed_ms": 69.0,
+      "rows": [
+        {
+          "pattern": "data TLB error interrupt",
+          "component": "KERNEL",
+          "team": "Compute Kernel",
+          "levels": "FATAL",
+          "lines": 152734,
+          "nodes": 541,
+          "active_days": 11,
+          "first_seen": "2005-06-05 00:08:13.410695",
+          "last_seen": "2005-11-28 10:01:47.587002"
+        },
+        {
+          "pattern": "data storage interrupt",
+          "component": "KERNEL",
+          "team": "Compute Kernel",
+          "levels": "FATAL",
+          "lines": 63491,
+          "nodes": 22529,
+          "active_days": 5,
+          "first_seen": "2005-06-13 17:36:20.973743",
+          "last_seen": "2005-11-22 14:52:43.442135"
+        },
+        {
+          "pattern": "ciod: Error reading message prefix on CioStream socket to <*>.<*>.<*>.<*>:<*>, Link has been severed",
+          "component": "APP",
+          "team": "HPC Applications",
+          "levels": "FATAL",
+          "lines": 26546,
+          "nodes": 1024,
+          "active_days": 35,
+          "first_seen": "2005-11-17 05:33:24.623263",
+          "last_seen": "2006-01-03 11:56:38.877831"
+        },
+        {
+          "pattern": "rts: kernel terminated for reason <*>",
+          "component": "KERNEL",
+          "team": "Compute Kernel",
+          "levels": "FATAL",
+          "lines": 18587,
+          "nodes": 7650,
+          "active_days": 17,
+          "first_seen": "2005-08-13 21:27:41.205332",
+          "last_seen": "2005-11-16 12:37:18.653547"
+        },
+        {
+          "pattern": "ciod: Error reading message prefix after LOAD_MESSAGE on CioStream socket to <*>.<*>.<*>.<*>:<*>: Link has been severed",
+          "component": "APP",
+          "team": "HPC Applications",
+          "levels": "FATAL",
+          "lines": 15273,
+          "nodes": 1024,
+          "active_days": 27,
+          "first_seen": "2005-08-05 09:11:59.393092",
+          "last_seen": "2005-12-03 07:01:32.861607"
+        },
+        {
+          "pattern": "Error receiving packet on tree network, expecting type <*> instead of type <*> (softheader=<*> <*> <*> <*>) PSR0=<*> PSR1=<*> PRXF=<*> PIXF=<*>",
+          "component": "KERNEL",
+          "team": "Compute Kernel",
+          "levels": "FATAL",
+          "lines": 6144,
+          "nodes": 4608,
+          "active_days": 6,
+          "first_seen": "2005-10-28 13:00:07.036731",
+          "last_seen": "2005-11-16 12:37:28.999011"
+        },
+        {
+          "pattern": "ciod: failed to read message prefix on control stream (CioStream socket to <*>.<*>.<*>.<*>:<*>",
+          "component": "APP",
+          "team": "HPC Applications",
+          "levels": "FATAL",
+          "lines": 5983,
+          "nodes": 512,
+          "active_days": 5,
+          "first_seen": "2005-06-04 00:24:32.398284",
+          "last_seen": "2005-06-20 01:42:45.024863"
+        },
+        {
+          "pattern": "ciod: Error reading message prefix after LOGIN_MESSAGE on CioStream socket to <*>.<*>.<*>.<*>:<*>: Link has been severed",
+          "component": "APP",
+          "team": "HPC Applications",
+          "levels": "FATAL",
+          "lines": 5683,
+          "nodes": 1024,
+          "active_days": 10,
+          "first_seen": "2005-07-20 11:54:27.005995",
+          "last_seen": "2005-12-11 19:22:10.097213"
+        },
+        {
+          "pattern": "rts panic! - stopping execution",
+          "component": "KERNEL",
+          "team": "Compute Kernel",
+          "levels": "FATAL",
+          "lines": 3983,
+          "nodes": 3394,
+          "active_days": 124,
+          "first_seen": "2005-06-05 01:55:06.697467",
+          "last_seen": "2006-01-03 03:25:05.504039"
+        },
+        {
+          "pattern": "rts: kernel terminated for reason 1001rts: bad message header: invalid cpu, type=<*>, cpu=<*>, index=<*>, total=<*>",
+          "component": "KERNEL",
+          "team": "Compute Kernel",
+          "levels": "FATAL",
+          "lines": 3334,
+          "nodes": 1255,
+          "active_days": 10,
+          "first_seen": "2005-07-08 16:48:27.022951",
+          "last_seen": "2005-07-25 13:14:09.775000"
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "patterns_bgl_alerts",
+      "role": "team lead",
+      "question": "Which BGL alert message patterns recur most?"
+    },
+    {
+      "query": "recurring_patterns",
+      "scope": "openstack: level = 'WARNING'",
+      "sql": "SELECT regexp_replace(regexp_replace(l.message, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<uuid>', 'g'), '0x[0-9a-fA-F]+|\\b[0-9a-fA-F]*[0-9][0-9a-fA-F]*\\b', '<*>', 'g') AS pattern, l.component, o.team,\n       string_agg(DISTINCT l.level, ',') AS levels, count(*) AS lines, count(DISTINCT l.instance_id) AS instances,\n       count(DISTINCT l.ts::DATE) AS active_days, min(l.ts) AS first_seen, max(l.ts) AS last_seen,\n       count(*) OVER () AS total_patterns\nFROM openstack_logs l\nLEFT JOIN ownership o ON o.dataset = 'openstack' AND o.component = l.component\nWHERE l.level = %(level)s\nGROUP BY 1, 2, 3\nORDER BY lines DESC\nLIMIT %(limit)s",
+      "params": {
+        "level": "WARNING",
+        "limit": 10
+      },
+      "row_count": 4,
+      "total_available": 4,
+      "truncated": false,
+      "elapsed_ms": 6.6,
+      "rows": [
+        {
+          "pattern": "Unknown base file: /var/lib/nova/instances/_base/<*>",
+          "component": "nova.virt.libvirt.imagecache",
+          "team": "Virtualization",
+          "levels": "WARNING",
+          "lines": 3059,
+          "instances": 0,
+          "active_days": 3,
+          "first_seen": "2017-05-14 19:39:36.041000",
+          "last_seen": "2017-05-17 06:24:35.572000"
+        },
+        {
+          "pattern": "While synchronizing instance power states, found <*> instances in the database and <*> instances on the hypervisor.",
+          "component": "nova.compute.manager",
+          "team": "Virtualization",
+          "levels": "WARNING",
+          "lines": 45,
+          "instances": 0,
+          "active_days": 3,
+          "first_seen": "2017-05-14 19:39:09.660000",
+          "last_seen": "2017-05-17 05:48:27.647000"
+        },
+        {
+          "pattern": "couldn't obtain the vcpu count from domain id: <uuid>, exception: Requested operation is not valid: cpu affinity is not supported",
+          "component": "nova.virt.libvirt.driver",
+          "team": "Virtualization",
+          "levels": "WARNING",
+          "lines": 12,
+          "instances": 0,
+          "active_days": 3,
+          "first_seen": "2017-05-14 19:51:01.501000",
+          "last_seen": "2017-05-17 04:45:50.198000"
+        },
+        {
+          "pattern": "Identity response: <!DOCTYPE HTML PUBLIC \"-//IETF//DTD HTML <*>.<*>//EN\">",
+          "component": "keystonemiddleware.auth_token",
+          "team": "Cloud API",
+          "levels": "WARNING",
+          "lines": 2,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 06:25:02.868000",
+          "last_seen": "2017-05-17 06:25:03.045000"
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "patterns_openstack_problems_warning",
+      "role": "team lead",
+      "question": "Which OpenStack WARNING patterns recur?"
+    },
+    {
+      "query": "recurring_patterns",
+      "scope": "openstack: level = 'ERROR'",
+      "sql": "SELECT regexp_replace(regexp_replace(l.message, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<uuid>', 'g'), '0x[0-9a-fA-F]+|\\b[0-9a-fA-F]*[0-9][0-9a-fA-F]*\\b', '<*>', 'g') AS pattern, l.component, o.team,\n       string_agg(DISTINCT l.level, ',') AS levels, count(*) AS lines, count(DISTINCT l.instance_id) AS instances,\n       count(DISTINCT l.ts::DATE) AS active_days, min(l.ts) AS first_seen, max(l.ts) AS last_seen,\n       count(*) OVER () AS total_patterns\nFROM openstack_logs l\nLEFT JOIN ownership o ON o.dataset = 'openstack' AND o.component = l.component\nWHERE l.level = %(level)s\nGROUP BY 1, 2, 3\nORDER BY lines DESC\nLIMIT %(limit)s",
+      "params": {
+        "level": "ERROR",
+        "limit": 10
+      },
+      "row_count": 10,
+      "total_available": 25,
+      "truncated": true,
+      "elapsed_ms": 4.0,
+      "rows": [
+        {
+          "pattern": "Traceback (most recent call last):",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        },
+        {
+          "pattern": "    self.driver.manage_image_cache(context, filtered_instances)",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        },
+        {
+          "pattern": "  File \"/usr/lib/python2.<*>/dist-packages/nova/virt/libvirt/imagecache.py\", line <*>, in _age_and_verify_cached_images",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        },
+        {
+          "pattern": "    disk_path)",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        },
+        {
+          "pattern": "  File \"/usr/lib/python2.<*>/dist-packages/nova/virt/libvirt/utils.py\", line <*>, in get_disk_backing_file",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        },
+        {
+          "pattern": "Stderr: u\"qemu-img: Could not open '/var/lib/nova/instances/<uuid>/disk': Could not open '/var/lib/nova/instances/<uuid>/disk': No such file or directory\\n\"",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        },
+        {
+          "pattern": "  File \"/usr/lib/python2.<*>/dist-packages/oslo_service/periodic_task.py\", line <*>, in run_periodic_tasks",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        },
+        {
+          "pattern": "  File \"/usr/lib/python2.<*>/dist-packages/nova/virt/libvirt/driver.py\", line <*>, in manage_image_cache",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        },
+        {
+          "pattern": "    self.image_cache_manager.update(context, all_instances)",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        },
+        {
+          "pattern": "  File \"/usr/lib/python2.<*>/dist-packages/nova/virt/libvirt/imagecache.py\", line <*>, in _list_backing_images",
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "levels": "ERROR",
+          "lines": 8,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 03:19:45.356000",
+          "last_seen": "2017-05-17 05:24:15.342000"
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "patterns_openstack_problems_error",
+      "role": "team lead",
+      "question": "Which OpenStack ERROR patterns recur?"
+    },
+    {
+      "query": "team_priorities",
+      "scope": "bgl: whole dataset, problem = alert lines, recent window 7d",
+      "sql": "WITH p AS (\n  SELECT o.team, l.component, l.ts, l.message, l.node AS unit\n  FROM bgl_logs l\n  JOIN ownership o ON o.dataset = 'bgl' AND o.component = l.component\n  WHERE l.is_alert\n), bounds AS (SELECT (SELECT max(ts) FROM bgl_logs) AS end_ts)\nSELECT p.team, count(*) AS problem_lines,\n       count(DISTINCT regexp_replace(regexp_replace(p.message, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<uuid>', 'g'), '0x[0-9a-fA-F]+|\\b[0-9a-fA-F]*[0-9][0-9a-fA-F]*\\b', '<*>', 'g')) AS distinct_patterns,\n       count(DISTINCT p.unit) AS nodes, count(DISTINCT p.ts::DATE) AS active_days,\n       min(p.ts) AS first_seen, max(p.ts) AS last_seen,\n       count(*) FILTER (WHERE p.ts >= b.end_ts - to_days(%(recent)s)) AS recent_lines,\n       count(*) FILTER (WHERE p.ts >= b.end_ts - to_days(2 * %(recent)s)\n                          AND p.ts < b.end_ts - to_days(%(recent)s)) AS previous_lines\nFROM p, bounds b\nGROUP BY p.team\nORDER BY problem_lines DESC",
+      "params": {
+        "recent": 7
+      },
+      "row_count": 4,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 60.3,
+      "rows": [
+        {
+          "team": "Compute Kernel",
+          "problem_lines": 284344,
+          "distinct_patterns": 2218,
+          "nodes": 31354,
+          "active_days": 179,
+          "first_seen": "2005-06-05 00:08:13.410695",
+          "last_seen": "2006-01-04 08:00:05.233639",
+          "recent_lines": 343,
+          "previous_lines": 35
+        },
+        {
+          "team": "HPC Applications",
+          "problem_lines": 63845,
+          "distinct_patterns": 19,
+          "nodes": 1034,
+          "active_days": 80,
+          "first_seen": "2005-06-04 00:24:32.398284",
+          "last_seen": "2006-01-03 11:56:38.877831",
+          "recent_lines": 656,
+          "previous_lines": 2461
+        },
+        {
+          "team": "Hardware & Interconnect",
+          "problem_lines": 221,
+          "distinct_patterns": 16,
+          "nodes": 17,
+          "active_days": 22,
+          "first_seen": "2005-06-28 14:28:25.882436",
+          "last_seen": "2005-12-08 18:10:50.536792",
+          "recent_lines": 0,
+          "previous_lines": 0
+        },
+        {
+          "team": "Cluster Control",
+          "problem_lines": 50,
+          "distinct_patterns": 6,
+          "nodes": 3,
+          "active_days": 22,
+          "first_seen": "2005-06-28 13:53:21.974236",
+          "last_seen": "2005-12-07 23:15:21.508320",
+          "recent_lines": 0,
+          "previous_lines": 0
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "priorities_bgl",
+      "role": "manager",
+      "question": "Which BGL teams have the most problem lines, and is it getting better or worse?"
+    },
+    {
+      "query": "team_priorities",
+      "scope": "openstack: whole dataset, problem = WARNING/ERROR/CRITICAL lines, recent window 1d",
+      "sql": "WITH p AS (\n  SELECT o.team, l.component, l.ts, l.message, l.instance_id AS unit\n  FROM openstack_logs l\n  JOIN ownership o ON o.dataset = 'openstack' AND o.component = l.component\n  WHERE l.level <> 'INFO'\n), bounds AS (SELECT (SELECT max(ts) FROM openstack_logs) AS end_ts)\nSELECT p.team, count(*) AS problem_lines,\n       count(DISTINCT regexp_replace(regexp_replace(p.message, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '<uuid>', 'g'), '0x[0-9a-fA-F]+|\\b[0-9a-fA-F]*[0-9][0-9a-fA-F]*\\b', '<*>', 'g')) AS distinct_patterns,\n       count(DISTINCT p.unit) AS instances, count(DISTINCT p.ts::DATE) AS active_days,\n       min(p.ts) AS first_seen, max(p.ts) AS last_seen,\n       count(*) FILTER (WHERE p.ts >= b.end_ts - to_days(%(recent)s)) AS recent_lines,\n       count(*) FILTER (WHERE p.ts >= b.end_ts - to_days(2 * %(recent)s)\n                          AND p.ts < b.end_ts - to_days(%(recent)s)) AS previous_lines\nFROM p, bounds b\nGROUP BY p.team\nORDER BY problem_lines DESC",
+      "params": {
+        "recent": 1
+      },
+      "row_count": 2,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 6.7,
+      "rows": [
+        {
+          "team": "Virtualization",
+          "problem_lines": 3308,
+          "distinct_patterns": 27,
+          "instances": 0,
+          "active_days": 3,
+          "first_seen": "2017-05-14 19:39:09.660000",
+          "last_seen": "2017-05-17 06:24:35.572000",
+          "recent_lines": 2155,
+          "previous_lines": 878
+        },
+        {
+          "team": "Cloud API",
+          "problem_lines": 6,
+          "distinct_patterns": 3,
+          "instances": 0,
+          "active_days": 2,
+          "first_seen": "2017-05-16 06:25:02.867000",
+          "last_seen": "2017-05-17 06:25:03.046000",
+          "recent_lines": 3,
+          "previous_lines": 3
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "priorities_openstack",
+      "role": "manager",
+      "question": "Which OpenStack teams have the most problem lines?"
+    },
+    {
+      "query": "latency_summary",
+      "scope": "openstack: HTTP access lines, slow > 1.0s",
+      "sql": "SELECT l.http_method || ' ' || regexp_replace(regexp_replace(regexp_replace(l.http_path, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '{id}', 'g'), '/[0-9a-f]{32}', '/{tenant}', 'g'), '\\?.*$', '') AS endpoint, count(*) AS requests,\n       round(avg(l.latency_s), 3) AS avg_s,\n       round(quantile_cont(l.latency_s, 0.5), 3) AS p50_s,\n       round(quantile_cont(l.latency_s, 0.95), 3) AS p95_s,\n       round(quantile_cont(l.latency_s, 0.99), 3) AS p99_s,\n       round(max(l.latency_s), 3) AS max_s,\n       count(*) FILTER (WHERE l.latency_s > %(slow)s) AS slow_requests,\n       count(*) FILTER (WHERE l.http_status >= 400) AS error_responses,\n       count(*) OVER () AS total_groups\nFROM openstack_logs l\nWHERE l.latency_s IS NOT NULL\nGROUP BY 1\nORDER BY requests DESC\nLIMIT %(limit)s",
+      "params": {
+        "slow": 1.0,
+        "limit": 15
+      },
+      "row_count": 15,
+      "total_available": 33,
+      "truncated": true,
+      "elapsed_ms": 10.9,
+      "rows": [
+        {
+          "endpoint": "GET /v2/{tenant}/servers/detail",
+          "requests": 67716,
+          "avg_s": 0.264,
+          "p50_s": 0.265,
+          "p95_s": 0.365,
+          "p99_s": 0.436,
+          "max_s": 4.164,
+          "slow_requests": 9,
+          "error_responses": 2
+        },
+        {
+          "endpoint": "POST /v2/{tenant}/os-server-external-events",
+          "requests": 4129,
+          "avg_s": 0.097,
+          "p50_s": 0.092,
+          "p95_s": 0.106,
+          "p99_s": 0.257,
+          "max_s": 2.145,
+          "slow_requests": 1,
+          "error_responses": 2064
+        },
+        {
+          "endpoint": "GET /openstack/2013-10-17/vendor_data.json",
+          "requests": 4071,
+          "avg_s": 0.143,
+          "p50_s": 0.22,
+          "p95_s": 0.327,
+          "p99_s": 0.398,
+          "max_s": 2.239,
+          "slow_requests": 1,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "GET /openstack/2013-10-17/meta_data.json",
+          "requests": 3322,
+          "avg_s": 0.124,
+          "p50_s": 0.211,
+          "p95_s": 0.275,
+          "p99_s": 0.402,
+          "max_s": 0.788,
+          "slow_requests": 0,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "GET /v2/{tenant}/servers/{id}",
+          "requests": 2066,
+          "avg_s": 0.209,
+          "p50_s": 0.196,
+          "p95_s": 0.337,
+          "p99_s": 0.384,
+          "max_s": 0.721,
+          "slow_requests": 0,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "POST /v2/{tenant}/servers",
+          "requests": 2065,
+          "avg_s": 0.519,
+          "p50_s": 0.504,
+          "p95_s": 0.648,
+          "p99_s": 0.765,
+          "max_s": 1.793,
+          "slow_requests": 4,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "GET /openstack/2012-08-10/meta_data.json",
+          "requests": 2064,
+          "avg_s": 0.244,
+          "p50_s": 0.229,
+          "p95_s": 0.37,
+          "p99_s": 0.403,
+          "max_s": 2.244,
+          "slow_requests": 1,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "DELETE /v2/{tenant}/servers/{id}",
+          "requests": 2064,
+          "avg_s": 0.268,
+          "p50_s": 0.261,
+          "p95_s": 0.297,
+          "p99_s": 0.437,
+          "max_s": 1.251,
+          "slow_requests": 2,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "GET /openstack/2013-10-17",
+          "requests": 2063,
+          "avg_s": 0.125,
+          "p50_s": 0.214,
+          "p95_s": 0.251,
+          "p99_s": 0.39,
+          "max_s": 0.585,
+          "slow_requests": 0,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "GET /openstack/2013-10-17/user_data",
+          "requests": 1905,
+          "avg_s": 0.126,
+          "p50_s": 0.215,
+          "p95_s": 0.265,
+          "p99_s": 0.391,
+          "max_s": 0.575,
+          "slow_requests": 0,
+          "error_responses": 1905
+        },
+        {
+          "endpoint": "GET /latest/meta-data/",
+          "requests": 1368,
+          "avg_s": 0.113,
+          "p50_s": 0.002,
+          "p95_s": 0.266,
+          "p99_s": 0.401,
+          "max_s": 0.483,
+          "slow_requests": 0,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "GET /latest/meta-data/block-device-mapping/",
+          "requests": 1180,
+          "avg_s": 0.126,
+          "p50_s": 0.211,
+          "p95_s": 0.266,
+          "p99_s": 0.402,
+          "max_s": 1.87,
+          "slow_requests": 1,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "GET /latest/meta-data/block-device-mapping/ami",
+          "requests": 978,
+          "avg_s": 0.108,
+          "p50_s": 0.001,
+          "p95_s": 0.261,
+          "p99_s": 0.397,
+          "max_s": 0.658,
+          "slow_requests": 0,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "GET /latest/meta-data/block-device-mapping/root",
+          "requests": 820,
+          "avg_s": 0.104,
+          "p50_s": 0.001,
+          "p95_s": 0.274,
+          "p99_s": 0.393,
+          "max_s": 0.644,
+          "slow_requests": 0,
+          "error_responses": 0
+        },
+        {
+          "endpoint": "GET /latest/meta-data/placement/",
+          "requests": 670,
+          "avg_s": 0.099,
+          "p50_s": 0.001,
+          "p95_s": 0.305,
+          "p99_s": 0.416,
+          "max_s": 0.563,
+          "slow_requests": 0,
+          "error_responses": 0
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "latency_by_endpoint",
+      "role": "team lead",
+      "question": "Which OpenStack API endpoints are slowest (p95/p99)?"
+    },
+    {
+      "query": "latency_summary",
+      "scope": "openstack: HTTP access lines, slow > 1.0s",
+      "sql": "SELECT l.http_status::TEXT AS status, count(*) AS requests,\n       round(avg(l.latency_s), 3) AS avg_s,\n       round(quantile_cont(l.latency_s, 0.5), 3) AS p50_s,\n       round(quantile_cont(l.latency_s, 0.95), 3) AS p95_s,\n       round(quantile_cont(l.latency_s, 0.99), 3) AS p99_s,\n       round(max(l.latency_s), 3) AS max_s,\n       count(*) FILTER (WHERE l.latency_s > %(slow)s) AS slow_requests,\n       count(*) FILTER (WHERE l.http_status >= 400) AS error_responses,\n       count(*) OVER () AS total_groups\nFROM openstack_logs l\nWHERE l.latency_s IS NOT NULL\nGROUP BY 1\nORDER BY requests DESC\nLIMIT %(limit)s",
+      "params": {
+        "slow": 1.0,
+        "limit": 30
+      },
+      "row_count": 5,
+      "total_available": 5,
+      "truncated": false,
+      "elapsed_ms": 7.2,
+      "rows": [
+        {
+          "status": "200",
+          "requests": 90633,
+          "avg_s": 0.232,
+          "p50_s": 0.26,
+          "p95_s": 0.358,
+          "p99_s": 0.433,
+          "max_s": 4.164,
+          "slow_requests": 14,
+          "error_responses": 0
+        },
+        {
+          "status": "404",
+          "requests": 3969,
+          "avg_s": 0.109,
+          "p50_s": 0.09,
+          "p95_s": 0.248,
+          "p99_s": 0.367,
+          "max_s": 0.72,
+          "slow_requests": 0,
+          "error_responses": 3969
+        },
+        {
+          "status": "202",
+          "requests": 2065,
+          "avg_s": 0.519,
+          "p50_s": 0.504,
+          "p95_s": 0.648,
+          "p99_s": 0.765,
+          "max_s": 1.793,
+          "slow_requests": 4,
+          "error_responses": 0
+        },
+        {
+          "status": "204",
+          "requests": 2064,
+          "avg_s": 0.268,
+          "p50_s": 0.261,
+          "p95_s": 0.297,
+          "p99_s": 0.437,
+          "max_s": 1.251,
+          "slow_requests": 2,
+          "error_responses": 0
+        },
+        {
+          "status": "503",
+          "requests": 2,
+          "avg_s": 0.009,
+          "p50_s": 0.009,
+          "p95_s": 0.01,
+          "p99_s": 0.01,
+          "max_s": 0.01,
+          "slow_requests": 0,
+          "error_responses": 2
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "latency_by_status",
+      "role": "team lead",
+      "question": "Does latency differ by HTTP status?"
+    },
+    {
+      "query": "latency_trend",
+      "scope": "openstack: HTTP access lines, endpoint = 'POST /v2/{tenant}/servers', per hour",
+      "sql": "SELECT date_trunc('hour', l.ts) AS bucket, count(*) AS requests,\n       round(quantile_cont(l.latency_s, 0.5), 3) AS p50_s,\n       round(quantile_cont(l.latency_s, 0.95), 3) AS p95_s,\n       round(max(l.latency_s), 3) AS max_s,\n       count(*) FILTER (WHERE l.http_status >= 400) AS error_responses\nFROM openstack_logs l\nWHERE l.latency_s IS NOT NULL AND l.http_method || ' ' || regexp_replace(regexp_replace(regexp_replace(l.http_path, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '{id}', 'g'), '/[0-9a-f]{32}', '/{tenant}', 'g'), '\\?.*$', '') = %(endpoint)s\nGROUP BY 1\nORDER BY 1\nLIMIT %(limit)s",
+      "params": {
+        "endpoint": "POST /v2/{tenant}/servers",
+        "limit": 48
+      },
+      "row_count": 26,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 5.0,
+      "rows": [
+        {
+          "bucket": "2017-05-14 19:00:00",
+          "requests": 30,
+          "p50_s": 0.507,
+          "p95_s": 0.788,
+          "max_s": 0.944,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-14 20:00:00",
+          "requests": 87,
+          "p50_s": 0.508,
+          "p95_s": 0.595,
+          "max_s": 0.664,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-14 21:00:00",
+          "requests": 79,
+          "p50_s": 0.503,
+          "p95_s": 0.598,
+          "max_s": 0.644,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 00:00:00",
+          "requests": 87,
+          "p50_s": 0.505,
+          "p95_s": 0.663,
+          "max_s": 0.712,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 01:00:00",
+          "requests": 86,
+          "p50_s": 0.501,
+          "p95_s": 0.558,
+          "max_s": 0.632,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 02:00:00",
+          "requests": 87,
+          "p50_s": 0.507,
+          "p95_s": 0.573,
+          "max_s": 0.648,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 03:00:00",
+          "requests": 86,
+          "p50_s": 0.503,
+          "p95_s": 0.652,
+          "max_s": 0.742,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 04:00:00",
+          "requests": 87,
+          "p50_s": 0.512,
+          "p95_s": 0.718,
+          "max_s": 0.793,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 05:00:00",
+          "requests": 86,
+          "p50_s": 0.498,
+          "p95_s": 0.557,
+          "max_s": 0.636,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 06:00:00",
+          "requests": 37,
+          "p50_s": 0.505,
+          "p95_s": 0.606,
+          "max_s": 0.879,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 15:00:00",
+          "requests": 64,
+          "p50_s": 0.498,
+          "p95_s": 0.686,
+          "max_s": 0.813,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 16:00:00",
+          "requests": 86,
+          "p50_s": 0.499,
+          "p95_s": 0.632,
+          "max_s": 0.72,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 17:00:00",
+          "requests": 87,
+          "p50_s": 0.509,
+          "p95_s": 0.632,
+          "max_s": 0.721,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 18:00:00",
+          "requests": 87,
+          "p50_s": 0.498,
+          "p95_s": 0.622,
+          "max_s": 0.737,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 19:00:00",
+          "requests": 86,
+          "p50_s": 0.498,
+          "p95_s": 0.673,
+          "max_s": 0.917,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 20:00:00",
+          "requests": 87,
+          "p50_s": 0.504,
+          "p95_s": 0.629,
+          "max_s": 0.776,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 21:00:00",
+          "requests": 87,
+          "p50_s": 0.504,
+          "p95_s": 0.597,
+          "max_s": 0.688,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 22:00:00",
+          "requests": 87,
+          "p50_s": 0.506,
+          "p95_s": 0.618,
+          "max_s": 0.742,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-16 23:00:00",
+          "requests": 86,
+          "p50_s": 0.505,
+          "p95_s": 0.697,
+          "max_s": 0.838,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-17 00:00:00",
+          "requests": 87,
+          "p50_s": 0.5,
+          "p95_s": 0.663,
+          "max_s": 0.834,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-17 01:00:00",
+          "requests": 86,
+          "p50_s": 0.503,
+          "p95_s": 0.636,
+          "max_s": 0.793,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-17 02:00:00",
+          "requests": 87,
+          "p50_s": 0.51,
+          "p95_s": 0.661,
+          "max_s": 1.793,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-17 03:00:00",
+          "requests": 87,
+          "p50_s": 0.5,
+          "p95_s": 0.676,
+          "max_s": 0.989,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-17 04:00:00",
+          "requests": 86,
+          "p50_s": 0.51,
+          "p95_s": 0.665,
+          "max_s": 0.712,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-17 05:00:00",
+          "requests": 87,
+          "p50_s": 0.503,
+          "p95_s": 0.625,
+          "max_s": 1.08,
+          "error_responses": 0
+        },
+        {
+          "bucket": "2017-05-17 06:00:00",
+          "requests": 36,
+          "p50_s": 0.498,
+          "p95_s": 0.6,
+          "max_s": 1.211,
+          "error_responses": 0
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "latency_trend_hourly_create",
+      "role": "team lead",
+      "question": "How does server-create latency evolve per hour?"
+    },
+    {
+      "query": "error_rates",
+      "scope": "openstack: HTTP access lines",
+      "sql": "SELECT l.http_method || ' ' || regexp_replace(regexp_replace(regexp_replace(l.http_path, '[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}', '{id}', 'g'), '/[0-9a-f]{32}', '/{tenant}', 'g'), '\\?.*$', '') AS endpoint, count(*) AS requests,\n       count(*) FILTER (WHERE l.http_status BETWEEN 400 AND 499) AS client_errors_4xx,\n       count(*) FILTER (WHERE l.http_status >= 500) AS server_errors_5xx,\n       round(100.0 * count(*) FILTER (WHERE l.http_status >= 400) / count(*), 2) AS error_pct\nFROM openstack_logs l\nWHERE l.http_status IS NOT NULL\nGROUP BY 1\nORDER BY client_errors_4xx + server_errors_5xx DESC, requests DESC\nLIMIT %(limit)s",
+      "params": {
+        "limit": 10
+      },
+      "row_count": 10,
+      "total_available": null,
+      "truncated": true,
+      "elapsed_ms": 6.1,
+      "rows": [
+        {
+          "endpoint": "POST /v2/{tenant}/os-server-external-events",
+          "requests": 4129,
+          "client_errors_4xx": 2064,
+          "server_errors_5xx": 0,
+          "error_pct": 49.99
+        },
+        {
+          "endpoint": "GET /openstack/2013-10-17/user_data",
+          "requests": 1905,
+          "client_errors_4xx": 1905,
+          "server_errors_5xx": 0,
+          "error_pct": 100.0
+        },
+        {
+          "endpoint": "GET /v2/{tenant}/servers/detail",
+          "requests": 67716,
+          "client_errors_4xx": 0,
+          "server_errors_5xx": 2,
+          "error_pct": 0.0
+        },
+        {
+          "endpoint": "GET /openstack/2013-10-17/vendor_data.json",
+          "requests": 4071,
+          "client_errors_4xx": 0,
+          "server_errors_5xx": 0,
+          "error_pct": 0.0
+        },
+        {
+          "endpoint": "GET /openstack/2013-10-17/meta_data.json",
+          "requests": 3322,
+          "client_errors_4xx": 0,
+          "server_errors_5xx": 0,
+          "error_pct": 0.0
+        },
+        {
+          "endpoint": "GET /v2/{tenant}/servers/{id}",
+          "requests": 2066,
+          "client_errors_4xx": 0,
+          "server_errors_5xx": 0,
+          "error_pct": 0.0
+        },
+        {
+          "endpoint": "POST /v2/{tenant}/servers",
+          "requests": 2065,
+          "client_errors_4xx": 0,
+          "server_errors_5xx": 0,
+          "error_pct": 0.0
+        },
+        {
+          "endpoint": "GET /openstack/2012-08-10/meta_data.json",
+          "requests": 2064,
+          "client_errors_4xx": 0,
+          "server_errors_5xx": 0,
+          "error_pct": 0.0
+        },
+        {
+          "endpoint": "DELETE /v2/{tenant}/servers/{id}",
+          "requests": 2064,
+          "client_errors_4xx": 0,
+          "server_errors_5xx": 0,
+          "error_pct": 0.0
+        },
+        {
+          "endpoint": "GET /openstack/2013-10-17",
+          "requests": 2063,
+          "client_errors_4xx": 0,
+          "server_errors_5xx": 0,
+          "error_pct": 0.0
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "error_rates_by_endpoint",
+      "role": "team lead",
+      "question": "Which endpoints return 4xx/5xx most often?"
+    },
+    {
+      "query": "error_rates",
+      "scope": "openstack: whole dataset",
+      "sql": "SELECT l.component, o.team, count(*) AS lines,\n       count(*) FILTER (WHERE l.level = 'WARNING') AS warnings,\n       count(*) FILTER (WHERE l.level = 'ERROR') AS errors,\n       count(*) FILTER (WHERE l.level = 'CRITICAL') AS critical,\n       round(100.0 * count(*) FILTER (WHERE l.level <> 'INFO') / count(*), 2) AS problem_pct\nFROM openstack_logs l\nLEFT JOIN ownership o ON o.dataset = 'openstack' AND o.component = l.component\n\nGROUP BY ALL\nORDER BY warnings + errors + critical DESC, lines DESC\nLIMIT %(limit)s",
+      "params": {
+        "limit": 30
+      },
+      "row_count": 12,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 4.9,
+      "rows": [
+        {
+          "component": "nova.virt.libvirt.imagecache",
+          "team": "Virtualization",
+          "lines": 45298,
+          "warnings": 3059,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 6.75
+        },
+        {
+          "component": "oslo_service.periodic_task",
+          "team": "Virtualization",
+          "lines": 192,
+          "warnings": 0,
+          "errors": 192,
+          "critical": 0,
+          "problem_pct": 100.0
+        },
+        {
+          "component": "nova.compute.manager",
+          "team": "Virtualization",
+          "lines": 24784,
+          "warnings": 45,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 0.18
+        },
+        {
+          "component": "nova.virt.libvirt.driver",
+          "team": "Virtualization",
+          "lines": 10336,
+          "warnings": 12,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 0.12
+        },
+        {
+          "component": "keystonemiddleware.auth_token",
+          "team": "Cloud API",
+          "lines": 6,
+          "warnings": 2,
+          "errors": 2,
+          "critical": 2,
+          "problem_pct": 100.0
+        },
+        {
+          "component": "nova.osapi_compute.wsgi.server",
+          "team": "Cloud API",
+          "lines": 78330,
+          "warnings": 0,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 0.0
+        },
+        {
+          "component": "nova.metadata.wsgi.server",
+          "team": "Cloud API",
+          "lines": 20403,
+          "warnings": 0,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 0.0
+        },
+        {
+          "component": "nova.compute.claims",
+          "team": "Capacity & Scheduling",
+          "lines": 16520,
+          "warnings": 0,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 0.0
+        },
+        {
+          "component": "nova.compute.resource_tracker",
+          "team": "Capacity & Scheduling",
+          "lines": 6956,
+          "warnings": 0,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 0.0
+        },
+        {
+          "component": "nova.api.openstack.compute.server_external_events",
+          "team": "Cloud API",
+          "lines": 2065,
+          "warnings": 0,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 0.0
+        },
+        {
+          "component": "nova.api.openstack.wsgi",
+          "team": "Cloud API",
+          "lines": 2064,
+          "warnings": 0,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 0.0
+        },
+        {
+          "component": "nova.scheduler.host_manager",
+          "team": "Capacity & Scheduling",
+          "lines": 866,
+          "warnings": 0,
+          "errors": 0,
+          "critical": 0,
+          "problem_pct": 0.0
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "error_rates_by_component",
+      "role": "team lead",
+      "question": "Which OpenStack components log the most warnings/errors?"
+    },
+    {
+      "query": "anomaly_comparison",
+      "scope": "openstack: nova.compute.manager 'Took N seconds' lines, anomalous = anomaly_labels.txt",
+      "sql": "WITH steps AS (\n  SELECT l.is_anomaly, l.instance_id,\n         regexp_extract(l.message, 'Took [0-9.]+ seconds to (.*?)\\.?$', 1) AS step,\n         regexp_extract(l.message, 'Took ([0-9.]+) seconds', 1)::DOUBLE AS seconds\n  FROM openstack_logs l\n  WHERE l.component = 'nova.compute.manager' AND regexp_matches(l.message, 'Took [0-9.]+ seconds to ')\n)\nSELECT step, CASE WHEN is_anomaly THEN 'anomalous' ELSE 'normal' END AS instances,\n       count(*) AS samples, round(avg(seconds), 2) AS avg_s, round(min(seconds), 2) AS min_s,\n       round(quantile_cont(seconds, 0.5), 2) AS p50_s, round(quantile_cont(seconds, 0.95), 2) AS p95_s,\n       round(max(seconds), 2) AS max_s\nFROM steps\nGROUP BY ALL\nORDER BY step, instances",
+      "params": {},
+      "row_count": 8,
+      "total_available": null,
+      "truncated": false,
+      "elapsed_ms": 14.1,
+      "rows": [
+        {
+          "step": "build instance",
+          "instances": "anomalous",
+          "samples": 4,
+          "avg_s": 39.21,
+          "min_s": 30.32,
+          "p50_s": 37.47,
+          "p95_s": 50.27,
+          "max_s": 51.59
+        },
+        {
+          "step": "build instance",
+          "instances": "normal",
+          "samples": 2062,
+          "avg_s": 20.6,
+          "min_s": 10.94,
+          "p50_s": 20.54,
+          "p95_s": 21.79,
+          "max_s": 27.61
+        },
+        {
+          "step": "deallocate network for instance",
+          "instances": "anomalous",
+          "samples": 4,
+          "avg_s": 0.51,
+          "min_s": 0.44,
+          "p50_s": 0.49,
+          "p95_s": 0.61,
+          "max_s": 0.62
+        },
+        {
+          "step": "deallocate network for instance",
+          "instances": "normal",
+          "samples": 2061,
+          "avg_s": 0.5,
+          "min_s": 0.42,
+          "p50_s": 0.47,
+          "p95_s": 0.59,
+          "max_s": 2.19
+        },
+        {
+          "step": "destroy the instance on the hypervisor",
+          "instances": "anomalous",
+          "samples": 4,
+          "avg_s": 1.02,
+          "min_s": 1.0,
+          "p50_s": 1.02,
+          "p95_s": 1.03,
+          "max_s": 1.03
+        },
+        {
+          "step": "destroy the instance on the hypervisor",
+          "instances": "normal",
+          "samples": 2060,
+          "avg_s": 1.02,
+          "min_s": 0.95,
+          "p50_s": 1.02,
+          "p95_s": 1.08,
+          "max_s": 1.52
+        },
+        {
+          "step": "spawn the instance on the hypervisor",
+          "instances": "anomalous",
+          "samples": 4,
+          "avg_s": 38.32,
+          "min_s": 29.46,
+          "p50_s": 36.54,
+          "p95_s": 49.38,
+          "max_s": 50.72
+        },
+        {
+          "step": "spawn the instance on the hypervisor",
+          "instances": "normal",
+          "samples": 2062,
+          "avg_s": 19.79,
+          "min_s": 10.12,
+          "p50_s": 19.74,
+          "p95_s": 20.99,
+          "max_s": 26.69
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "anomaly_lifecycle_comparison",
+      "role": "manager",
+      "question": "Do the labelled anomalous instances behave differently from normal ones?"
+    },
+    {
+      "query": "slowest_instances",
+      "scope": "openstack: 'Took N seconds to spawn the instance on the hypervisor'",
+      "sql": "SELECT l.instance_id, l.is_anomaly, l.source_file, l.ts,\n       regexp_extract(l.message, 'Took ([0-9.]+) seconds', 1)::DOUBLE AS seconds,\n       count(*) OVER () AS total_matches\nFROM openstack_logs l\nWHERE l.component = 'nova.compute.manager' AND l.message LIKE '%%Took %% seconds to ' || %(step)s || '%%'\nORDER BY seconds DESC\nLIMIT %(limit)s",
+      "params": {
+        "step": "spawn the instance on the hypervisor",
+        "limit": 10
+      },
+      "row_count": 10,
+      "total_available": 2066,
+      "truncated": true,
+      "elapsed_ms": 16.9,
+      "rows": [
+        {
+          "instance_id": "a445709b-6ad0-40ec-8860-bec60b6ca0c2",
+          "is_anomaly": true,
+          "source_file": "openstack_abnormal",
+          "ts": "2017-05-14 21:43:33.762000",
+          "seconds": 50.72
+        },
+        {
+          "instance_id": "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+          "is_anomaly": true,
+          "source_file": "openstack_abnormal",
+          "ts": "2017-05-14 21:08:19.736000",
+          "seconds": 41.81
+        },
+        {
+          "instance_id": "1643649d-2f42-4303-bfcd-7798baec19f9",
+          "is_anomaly": true,
+          "source_file": "openstack_abnormal",
+          "ts": "2017-05-14 21:47:20.593000",
+          "seconds": 31.27
+        },
+        {
+          "instance_id": "ae651dff-c7ad-43d6-ac96-bbcd820ccca8",
+          "is_anomaly": true,
+          "source_file": "openstack_abnormal",
+          "ts": "2017-05-14 21:09:11.081000",
+          "seconds": 29.46
+        },
+        {
+          "instance_id": "d7d68893-c44f-4e7c-8d4b-0e7801d62776",
+          "is_anomaly": false,
+          "source_file": "openstack_abnormal",
+          "ts": "2017-05-14 21:45:04.509000",
+          "seconds": 26.69
+        },
+        {
+          "instance_id": "f0ff0b46-b3cd-43e6-97eb-839fd1cdaa87",
+          "is_anomaly": false,
+          "source_file": "openstack_normal2",
+          "ts": "2017-05-16 16:49:11.697000",
+          "seconds": 22.56
+        },
+        {
+          "instance_id": "35ef7d14-fd25-42fd-8140-9b7f71416c6d",
+          "is_anomaly": false,
+          "source_file": "openstack_normal2",
+          "ts": "2017-05-17 02:19:05.715000",
+          "seconds": 22.17
+        },
+        {
+          "instance_id": "f62173ce-6976-4b89-949e-491776eddf4a",
+          "is_anomaly": false,
+          "source_file": "openstack_normal1",
+          "ts": "2017-05-16 01:58:26.310000",
+          "seconds": 22.15
+        },
+        {
+          "instance_id": "15fd1c53-fbef-4d52-a69b-f7166c8845af",
+          "is_anomaly": false,
+          "source_file": "openstack_normal2",
+          "ts": "2017-05-16 19:05:48.285000",
+          "seconds": 22.07
+        },
+        {
+          "instance_id": "4c09a3a7-b94d-459f-879c-a7c0d3c21085",
+          "is_anomaly": false,
+          "source_file": "openstack_normal2",
+          "ts": "2017-05-17 04:12:42.620000",
+          "seconds": 22.02
+        }
+      ],
+      "uses_fulltext_index": false,
+      "case": "slowest_spawns",
+      "role": "engineer",
+      "question": "Which instances took longest to spawn, and are they the labelled anomalies?"
+    }
+  ]
+}

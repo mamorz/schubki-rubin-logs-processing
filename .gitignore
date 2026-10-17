@@ -8,3 +8,5 @@ data/raw/
 
 # Local settings (copy from .env.example)
 .env
+__pycache__
+.venv
