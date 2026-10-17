@@ -1,5 +1,5 @@
 -- Schema for the base corpus: BGL + OpenStack logs and the team-ownership table.
--- Safe to re-run: drops and recreates everything.
+-- DESTRUCTIVE: drops and recreates the objects below. Operator approval required.
 
 DROP INDEX IF EXISTS bgl_logs_idx;
 DROP INDEX IF EXISTS openstack_logs_idx;

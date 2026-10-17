@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "rubin-log-insights": {
+      "url": "http://127.0.0.1:18000/mcp",
+      "disabled": false,
+      "autoApprove": []
+    }
+  }
+}
