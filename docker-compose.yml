@@ -1,0 +1,39 @@
+services:
+  serenedb:
+    image: serenedb/serenedb:latest
+    # Only an amd64 image is published. On Apple Silicon run Docker with Rosetta
+    # (Colima: --vm-type vz --vz-rosetta); QEMU emulation hangs on startup.
+    platform: linux/amd64
+    restart: on-failure
+    stop_grace_period: 5s
+    environment:
+      SERENEDB_HOST_AUTH_METHOD: trust
+    ports:
+      - "7890:7890"
+    volumes:
+      - serenedb-data:/var/lib/serenedb
+      # Raw logs and the ownership table, readable from SQL as /data/...
+      - ./data:/data:ro
+
+  serene-ui:
+    image: serenedb/serene-ui:latest
+    restart: on-failure
+    stop_grace_period: 5s
+    stop_signal: SIGINT
+    ports:
+      - "6543:6543"
+    environment:
+      DEFAULT_CONNECTION_NAME: local
+      DEFAULT_CONNECTION_STRING: postgres://postgres@serenedb:7890/postgres
+    depends_on:
+      - serenedb
+
+  psql:
+    image: alpine/psql:latest
+    profiles: ["tools"]
+    entrypoint: ["psql", "-h", "serenedb", "-p", "7890", "-U", "postgres", "-v", "ON_ERROR_STOP=1"]
+    volumes:
+      - ./sql:/sql:ro
+
+volumes:
+  serenedb-data:
