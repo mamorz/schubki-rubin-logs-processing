@@ -1,2 +1,12 @@
 # Google App Engine generated folder
 appengine-generated/
+
+# Local Python environment and secrets
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.env
+.env.*
+!.env.example
