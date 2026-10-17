@@ -1,8 +1,8 @@
-name: ${COMPOSE_PROJECT_NAME:-schubki-integration}
+name: schubki-jury
 
 services:
   serenedb:
-    image: serenedb/serenedb:${SERENEDB_TAG:-26.09.1.3}
+    image: serenedb/serenedb:26.09.1.3
     restart: on-failure
     stop_grace_period: 5s
     environment:
@@ -20,14 +20,12 @@ services:
     restart: unless-stopped
     environment:
       # Trust-authenticated isolated development DB; never publish this network.
-      SERENEDB_DSN: ${SERENEDB_DOCKER_DSN:-host=serenedb port=7890 dbname=postgres user=postgres connect_timeout=5}
-      MCP_DATASET_BACKEND: ${MCP_DATASET_BACKEND:-sql}
+      SERENEDB_DSN: host=serenedb port=7890 dbname=postgres user=postgres connect_timeout=5
+      MCP_DATASET_BACKEND: sql
       MCP_TRANSPORT: streamable-http
       MCP_HOST: 0.0.0.0
       MCP_PORT: 8000
       MCP_PATH: /mcp
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     depends_on:
       - serenedb
     ports:
@@ -73,5 +71,5 @@ services:
       - ./sql:/sql:ro
 
 volumes:
-  # Compose prefixes this with schubki-integration; no external or fixed-name volume.
+  # Keep the existing schubki-jury_serenedb-data volume; never rename or remove it.
   serenedb-data:
