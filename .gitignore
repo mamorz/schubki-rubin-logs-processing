@@ -1,2 +1,24 @@
 # Google App Engine generated folder
 appengine-generated/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+
+# Local data and generated output
+data/
+artifacts/
+
+# Editor and operating-system files
+.idea/
+.DS_Store

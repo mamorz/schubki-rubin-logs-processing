@@ -1,0 +1,63 @@
+{
+  "manifest_version": "v1",
+  "sources": {
+    "bgl": {
+      "url": "https://zenodo.org/records/8196385/files/BGL.zip?download=1",
+      "archive_path": "data/full/archives/BGL.zip",
+      "archive_size_bytes": 57489019,
+      "archive_sha256": "d67fd82a711aea0157a9b83175892c6ee60e384a2ddf5bc51f39118453816da8",
+      "members": [
+        {
+          "name": "BGL.log",
+          "size_bytes": 743185031,
+          "sha256": "666130b15ef44eb32fd02bd053e6c6e007c37696b5e7e8b9d8e45b729876a5d2",
+          "role": "raw_log"
+        },
+        {
+          "name": "README.md",
+          "size_bytes": 1246,
+          "sha256": "b1a471b7cbd738fb6767a7d4d86475e119b6a2786d60844efd73001fa2530eb8",
+          "role": "documentation"
+        }
+      ]
+    },
+    "openstack": {
+      "url": "https://zenodo.org/records/8196385/files/OpenStack.tar.gz?download=1",
+      "archive_path": "data/full/archives/OpenStack.tar.gz",
+      "archive_size_bytes": 5394691,
+      "archive_sha256": "87c98c5ed03262e05cdb7a6f3717033df76d88fda0f7d2db23bd9fa4200f1879",
+      "anomaly_instance_ids": [
+        "544fd51c-4edc-4780-baae-ba1d80a0acfc",
+        "ae651dff-c7ad-43d6-ac96-bbcd820ccca8",
+        "a445709b-6ad0-40ec-8860-bec60b6ca0c2",
+        "1643649d-2f42-4303-bfcd-7798baec19f9"
+      ],
+      "members": [
+        {
+          "name": "anomaly_labels.txt",
+          "size_bytes": 243,
+          "sha256": "0882aa484f285e3dda476ff39ed739603c446f27b76bb113e284cda6ebb09d0b",
+          "role": "anomaly_metadata"
+        },
+        {
+          "name": "openstack_abnormal.log",
+          "size_bytes": 5436122,
+          "sha256": "7ab718fbb2f2b804893955cecf37ad9533cfa0efaf5b03009474d5bb019b6af4",
+          "role": "raw_log"
+        },
+        {
+          "name": "openstack_normal1.log",
+          "size_bytes": 15499595,
+          "sha256": "4e4d47347bdae198056bb3b0a8a755e1cb0100d6c6a30bbd4058684234769199",
+          "role": "raw_log"
+        },
+        {
+          "name": "openstack_normal2.log",
+          "size_bytes": 40506365,
+          "sha256": "3c51741dcea1fb0731d1f86588b12587707e7abea01e725ee16c9441b8b68db7",
+          "role": "raw_log"
+        }
+      ]
+    }
+  }
+}
