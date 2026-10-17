@@ -1,2 +1,10 @@
 # Google App Engine generated folder
 appengine-generated/
+
+# Downloaded datasets (scripts/download.sh)
+data/raw/
+
+.DS_Store
+
+# Local settings (copy from .env.example)
+.env
