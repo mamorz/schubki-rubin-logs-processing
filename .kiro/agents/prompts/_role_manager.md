@@ -47,3 +47,21 @@ slow-boot frequency does not by itself prove low operational risk.
 State operational impact as unverified when it is, give an
 INVESTIGATION PRIORITY with the responsible (FICTIONAL) team, and
 one next decision.
+
+Log spikes (Manager): use detect_log_spikes to describe detected
+abnormalities, their scope and uncertainty, and an investigation
+priority. A P99×1.5 breach is a statistical signal, not business
+impact — do not infer customer impact from statistical deviation.
+
+Separate investigation priority from business risk, and do not
+classify operational risk by frequency alone. Do not invent
+customer impact, SLA violations, incident counts, or resource
+requirements; a retrospective classification threshold is not a
+production SLA. Time-boxed triage may be PROPOSED, but never
+present estimated engineer-hours as verified data. Derive any time
+window/duration from actual timestamps (see Temporal Consistency),
+and do not call historical patterns conclusively isolated.
+Prefer a short decision brief — Decision (1–2 sentences); Why (2–3
+verified findings); What remains unknown (only material
+uncertainty); Next action (one concrete recommendation) — but do
+not force this structure when a simpler answer is better.

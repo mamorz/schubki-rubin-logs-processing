@@ -50,7 +50,7 @@ describe("per-request report", () => {
   });
 
   it("includes results as tables, truncation and SQL with parameters", () => {
-    expect(md).toContain("**Result:** 1 returned record count · 54,518 total corpus match count (truncated)");
+    expect(md).toContain("**Result:** 54,518 total corpus match count (truncated)");
     expect(md).toContain("| 1 | rts panic! \\| stop | FATAL |");
     expect(md).toContain("```sql\nSELECT 1\n```");
     expect(md).toContain('parameters `{"text":"kernel panic"}`');

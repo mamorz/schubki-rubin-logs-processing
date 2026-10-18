@@ -1,0 +1,9 @@
+{
+ "tool": "detect_log_spikes",
+ "arguments": {
+  "dataset": "bgl",
+  "baseline_scope": "reference"
+ },
+ "is_error": true,
+ "text": "Error executing tool detect_log_spikes: reference requires explicit analysis and baseline start_time/end_time ranges"
+}

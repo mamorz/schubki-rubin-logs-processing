@@ -141,3 +141,44 @@ describe("notes", () => {
     expect(labels).toEqual(expect.arrayContaining(["warning", "limitation"]));
   });
 });
+
+describe("detect_log_spikes (sixth tool)", () => {
+  it("renders findings as a table with nested contributors instead of raw JSON", () => {
+    const m = model("spikes_day_small");
+    const findings = m.tables.find((t) => t.key.endsWith("findings"))!;
+    expect(findings.rows.length).toBeGreaterThan(0);
+    expect(findings.columns).toEqual(expect.arrayContaining(["component", "start_time", "selected_record_count", "threshold"]));
+    expect(findings.nested).toEqual(["contributors"]);
+    expect(m.details.some((d) => d.label === "findings")).toBe(false);
+  });
+
+  it("expands a finding's contributors into their own table with nested evidence", () => {
+    const findings = model("spikes_day_small").tables.find((t) => t.key.endsWith("findings"))!;
+    const contributors = describeResult({ contributors: findings.rows[0]!.contributors })!;
+    const table = contributors.tables[0]!;
+    expect(table.columns).toEqual(expect.arrayContaining(["severity", "message", "record_count"]));
+    expect(table.nested).toEqual(["evidence"]);
+  });
+
+  it("summarises spikes first and keeps baselines, counts, coverage and SQL", () => {
+    const m = model("spikes_day_small");
+    expect(m.headline).toMatch(/^2 spike window count/);
+    expect(m.tables.some((t) => t.key.endsWith("baselines"))).toBe(true);
+    expect(m.statGroups.map((g) => g.key)).toEqual(expect.arrayContaining(["counts", "coverage"]));
+    expect(m.sql[0]!.parameters).toMatchObject({ threshold_multiplier: 1.5 });
+    expect(m.notes.map((n) => n.label)).toEqual(expect.arrayContaining(["warning", "limitation"]));
+  });
+
+  it("reports invalid arguments as a tool error", () => {
+    expect(fixture("spikes_error")).toMatchObject({ is_error: true });
+  });
+});
+
+describe("series and bar detection guards", () => {
+  it("keeps per-component baselines and time-range gaps as tables", () => {
+    const m = model("spikes_day_small");
+    expect(m.series).toEqual([]);
+    expect(m.bars).toEqual([]);
+    expect(m.tables.map((t) => t.key)).toEqual(expect.arrayContaining(["baselines.baselines", "coverage.gaps"]));
+  });
+});

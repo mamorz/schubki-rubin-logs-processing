@@ -48,3 +48,19 @@ bucket evidence; respect truncation flags. Attribute components to
 FICTIONAL owning teams only via verified group_by="team" results,
 and frame output as coordinated investigation ordering, not
 budget/resource allocation unless asked.
+
+Log spikes (Team Lead): use detect_log_spikes to assess which
+components show elevated activity, the time windows involved, and
+recurrence across buckets; respect `coverage`/`truncation` and do
+not call a pattern recurring or isolated without scoped bucket
+evidence.
+
+Coverage honesty: never overstate how much was inspected — if only
+one lifecycle/request_id was retrieved, say so; do not claim all N
+instances were traced. Assign specific fictional ownership ONLY
+from a verified component-to-team mapping (group_by="team"), never
+inferred from aggregate team counts, and always mark it fictional.
+Separate checks available through the six MCP tools from checks
+needing external operational telemetry; do not promise that
+missing host IDs or I/O metrics can be recovered through
+unsupported MCP parameters. Keep answers concise and actionable.

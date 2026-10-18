@@ -4,7 +4,8 @@
 //   executed_sql: {name: sql} (or a string) with sibling parameters  → SQL blocks
 //   truncated / *_truncated booleans, at any depth                  → truncation badge (+ which sections)
 //   error / status: "error" | "failed"                              → error card
-//   arrays of flat objects                                           → tables (columns discovered)
+//   arrays of row objects                                            → tables (columns discovered;
+//                                                                      nested lists per row expandable)
 //   ... with a time-bucket column and numeric metrics                → small-multiple time series
 //   ... with a label and one *count column                           → bar list
 //   ... ordered by timestamp                                         → chronological timeline
@@ -32,6 +33,8 @@ export interface TableView {
   columns: string[];
   /** Columns that are empty in every row; hidden but listed so missing data stays visible. */
   unavailable: string[];
+  /** Fields holding nested lists/objects per row (e.g. contributors); shown as expandable row details. */
+  nested: string[];
   rows: Row[];
   highlightRow: number | null;
   /** Rows are in time order: render as a timeline with gaps between events. */
@@ -84,21 +87,30 @@ const SECONDARY_COUNT = /invalid|missing|unique|candidate|requested|limit/i;
 const SQL_TEXT = /^\s*(SELECT|WITH)\b/i;
 const SQL_KEY = /(^|_)sql$/i;
 const TRUNCATED_KEY = /(^|_)truncated$/i;
-const BUCKET_KEY = /^bucket|^period$|^hour$|^day$|^date$|^week$|^month$|_start$|^time$/i;
+/** A time-bucket column; `observed_start`-style fields describe a row's span, not a bucket. */
+const BUCKET_KEY = /^bucket|^period$|^hour$|^day$|^date$|^week$|^month$|^time$/i;
+const TIME_LABEL = /time|date|_start$|_end$|^bucket|^period$/i;
 const TIMESTAMP_KEY = /timestamp|^ts$|_at$/i;
 const ID_KEY = /(^|_)id$/i;
 /** Objects describing inputs or method, never headline metrics. */
 const CONTEXT_KEY = /filter|parameter|provenance|scope|semantics|ordering|method|coverage_sql/i;
 
+/** Rows are objects with plain values; nested lists/objects inside a row are allowed (rendered per row). */
 function isRowArray(value: unknown): value is Row[] {
-  return Array.isArray(value) && value.length > 0 && value.every((row) => isObject(row) && Object.values(row).every((v) => isScalar(v)));
+  return (
+    Array.isArray(value) &&
+    value.length > 0 &&
+    value.every((row) => isObject(row) && Object.values(row).some((v) => isScalar(v) && v !== null))
+  );
 }
 
-function columnsOf(rows: Row[]): { columns: string[]; unavailable: string[] } {
+function columnsOf(rows: Row[]): { columns: string[]; unavailable: string[]; nested: string[] } {
   const all: string[] = [];
   for (const row of rows) for (const key of Object.keys(row)) if (!all.includes(key)) all.push(key);
+  const nested = all.filter((c) => rows.some((row) => !isScalar(row[c]) && row[c] !== undefined));
+  const scalar = all.filter((c) => !nested.includes(c));
   const present = (column: string) => rows.some((row) => row[column] !== null && row[column] !== undefined && row[column] !== "");
-  return { columns: all.filter(present), unavailable: all.filter((c) => !present(c)) };
+  return { columns: scalar.filter(present), unavailable: scalar.filter((c) => !present(c)), nested };
 }
 
 function formatScalar(value: unknown): string {
@@ -172,6 +184,11 @@ function asSeries(key: string, label: string, rows: Row[]): SeriesView | null {
   const { columns } = columnsOf(rows);
   const xKey = columns.find((c) => BUCKET_KEY.test(c) && rows.every((r) => typeof r[c] === "string"));
   if (!xKey) return null;
+  // Buckets run in one direction (oldest or newest first); anything else is not a time series.
+  const times = rows.map((r) => Date.parse(String(r[xKey])));
+  const ascending = times.every((t, i) => !Number.isNaN(t) && (i === 0 || t > times[i - 1]!));
+  const descending = times.every((t, i) => !Number.isNaN(t) && (i === 0 || t < times[i - 1]!));
+  if (!ascending && !descending) return null;
   const numeric = columns.filter(
     (c) => c !== xKey && !ID_KEY.test(c) && rows.every((r) => r[c] === null || typeof r[c] === "number") && rows.some((r) => r[c] !== 0),
   );
@@ -185,11 +202,13 @@ function asSeries(key: string, label: string, rows: Row[]): SeriesView | null {
 }
 
 function asBars(key: string, label: string, rows: Row[]): BarsView | null {
-  const { columns } = columnsOf(rows);
+  const { columns, nested } = columnsOf(rows);
+  if (nested.length > 0) return null;
   const numeric = columns.filter((c) => rows.every((r) => typeof r[c] === "number" || r[c] === null));
   const countKey = numeric.find((c) => COUNT_KEY.test(c));
   const labelKeys = columns.filter((c) => c !== countKey);
   if (!countKey || numeric.length > 1 || labelKeys.length === 0 || labelKeys.length > 3 || columns.includes("message")) return null;
+  if (labelKeys.some((c) => TIME_LABEL.test(c))) return null; // time ranges read better as a table
   return { key, label, countKey, labelKeys, rows };
 }
 
@@ -201,8 +220,19 @@ function isChronological(rows: Row[], columns: string[]): boolean {
 }
 
 function table(key: string, label: string, rows: Row[], highlightRow: number | null = null): TableView {
-  const { columns, unavailable } = columnsOf(rows);
-  return { key, label, columns, unavailable, rows, highlightRow, chronological: isChronological(rows, columns) };
+  const { columns, unavailable, nested } = columnsOf(rows);
+  return { key, label, columns, unavailable, nested, rows, highlightRow, chronological: isChronological(rows, columns) };
+}
+
+/** Per-row `*_truncated` flags (e.g. patterns_truncated) named after the table and the flag. */
+function rowTruncation(label: string, rows: Row[]): string[] {
+  const flags = new Set<string>();
+  for (const row of rows) {
+    for (const [key, value] of Object.entries(row)) {
+      if (value === true && TRUNCATED_KEY.test(key)) flags.add(`${label} ${humanize(key.replace(TRUNCATED_KEY, ""))}`.trim());
+    }
+  }
+  return [...flags];
 }
 
 function errorText(value: unknown): string | null {
@@ -261,6 +291,7 @@ function visit(object: Row, parent: string, model: ResultModel, skip: Set<string
       if (value !== null && value !== "") (nested ? groupStats : model.stats).push(stat(key, value));
     } else if (isRowArray(value)) {
       const name = nested ? parent : key;
+      model.truncatedSections.push(...rowTruncation(label, value));
       const series = asSeries(key, label, value);
       if (series) {
         model.series.push(series);
@@ -315,16 +346,26 @@ function groupOrRoot(nested: boolean, group: Stat[], model: ResultModel): Stat[]
   return nested ? group : model.stats;
 }
 
+/** Counts that describe findings come before bookkeeping counts in the one-line summary. */
+function headlinePriority(key: string): number {
+  if (/spike|finding|window/i.test(key)) return 0;
+  if (/slow|error|fail|anomal|fatal/i.test(key)) return 1;
+  if (/elevated|match/i.test(key)) return 2;
+  return 3;
+}
+
 function headline(model: ResultModel): string {
   if (model.error) return `error: ${model.error}`;
   const candidates = [...model.stats, ...model.statGroups.flatMap((g) => g.stats)].filter(
-    (s) => COUNT_KEY.test(s.key) && !SECONDARY_COUNT.test(s.key),
+    (s) => COUNT_KEY.test(s.key) && !SECONDARY_COUNT.test(s.key) && !/returned/i.test(s.key),
   );
   const seen = new Set<string>();
   const counts = candidates
     .filter((s) => !seen.has(s.key) && seen.add(s.key))
+    .map((s, i) => ({ s, rank: headlinePriority(s.key) * 1000 + i }))
+    .sort((a, b) => a.rank - b.rank)
     .slice(0, 2)
-    .map((s) => `${s.value} ${s.label}`);
+    .map(({ s }) => `${s.value} ${s.label}`);
   const parts = counts.length > 0
     ? counts
     : [...model.tables.map((t) => `${t.rows.length} ${t.label}`), ...model.bars.map((b) => `${b.rows.length} ${b.label}`)];

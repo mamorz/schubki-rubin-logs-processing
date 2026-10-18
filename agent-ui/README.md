@@ -70,8 +70,10 @@ browser ──WS /api/session──▶ Fastify (src/server) ──stdio ACP─�
   | `http_status`, `severity`/`level`, `is_*`/`has_*`, `*_id`, time columns | status-coloured / flag chips, IDs kept on one line, readable dates |
 
   New MCP tools and new fields render without UI changes as long as they follow these conventions.
-  `test/mcpContract.test.ts` checks them against real responses of all five tools
-  (`test/fixtures/mcp/`, recorded from `feature/advanced-log-analytics`).
+  Rows may contain nested lists (e.g. spike findings → contributors → evidence); their plain
+  fields form the table and each row expands to show its nested lists, rendered the same way.
+  `test/mcpContract.test.ts` checks the conventions against real responses of all six tools
+  (`test/fixtures/mcp/`).
 - Credits per turn come from Kiro's `_kiro.dev/metadata` extension notification.
 
 ## Role agents: contract with the agent definitions

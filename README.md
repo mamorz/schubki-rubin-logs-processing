@@ -6,7 +6,7 @@ RUBIN turns the BGL and OpenStack log corpora into evidence-backed answers for t
 - the **Team lead** asks which problems recur, how often, and which teams are involved;
 - the **Manager** asks what deserves attention first.
 
-SereneDB does the searching and counting. A read-only **MCP server** exposes that as five tools,
+SereneDB does the searching and counting. A read-only **MCP server** exposes that as six tools,
 and three **Kiro role agents** decide which tools to call and explain the results. Each answer
 shows its evidence: tool calls, executed SQL, bound parameters, counts and truncation. A
 **browser UI** runs the agents for you, so the only thing a judge needs besides Docker is a free
@@ -73,8 +73,8 @@ Expect several minutes. Later runs only verify; nothing is reloaded. When it pri
 | Optional SQL web UI | `./scripts/jury-compose.sh --profile ui up -d serene-ui` → `http://localhost:16543` |
 
 Connect any MCP client to `http://localhost:18000/mcp`. The server is named `rubin-log-insights`
-and exposes `health_check`, `search_logs`, `summarize_logs`, `get_nearby_events` and
-`analyze_vm_spawn_performance`.
+and exposes `health_check`, `search_logs`, `summarize_logs`, `get_nearby_events`,
+`analyze_vm_spawn_performance` and `detect_log_spikes`.
 
 ```bash
 # Claude Code
@@ -145,7 +145,7 @@ guessing. Guarantees, recovery steps and the full test matrix are in
 
 ## 2. What we built
 
-### 2.1 MCP server: five read-only tools
+### 2.1 MCP server: six read-only tools
 
 All tools are parameterised SELECTs against SereneDB. User values are always bound parameters,
 never spliced into SQL. Every result contains the **executed SQL and its parameters**, the
@@ -158,15 +158,17 @@ never spliced into SQL. Every result contains the **executed SQL and its paramet
 | `summarize_logs` | Aggregation over the **whole filtered corpus**: how often, where, who, when | `dataset`, `group_by` (`component`, `team`, `severity`, `event_id`, `time`), `interval` (`hour`/`day`/`week`/`month`), optional `query` + `match_mode` to count one specific pattern, time/component/severity filters, `sort_direction`, `limit` (≤ 100 groups) | groups with `record_count`, `total_matching_record_count`, scope, `truncated`, team **mapping coverage** for `group_by=team`, SQL |
 | `get_nearby_events` | Chronological context around one record | `dataset`, `record_id` (from `search_logs`), `before`/`after` (≤ 50, default 10), `same_component` | anchor, events before/after with second offsets, counts, causation warning, SQL |
 | `analyze_vm_spawn_performance` | OpenStack VM launch performance over the complete population | optional time range, `slow_threshold_seconds` or `baseline_multiplier` (default P95 × 1.25), `baseline_scope`, `interval` (hour/day), `top_limit`, `bucket_limit` | counts, mean/median/P95/P99/min/max, baseline, slow-event detection, slowest events, hourly/daily time series, warnings, SQL |
+| `detect_log_spikes` | BGL: find abnormal log-volume spikes without knowing where to look | optional time range, `component`, `interval` (hour/day), `signal` (adverse severities or total volume), `severities`, baseline settings (default per-component P99 × 1.5), `max_findings`, `patterns_per_finding`, `evidence_per_pattern` | spike windows per component with counts vs. baseline, top contributing messages with real evidence records, per-component baselines, coverage/clock diagnostics, warnings, SQL |
 | `health_check` | Process readiness | — | status |
 
 More detail: [search modes](docs/search_match_modes.md), [pattern aggregation](docs/pattern_aggregation.md),
-[OpenStack tracing](docs/openstack_tracing_mcp.md), [VM spawn performance](docs/vm_spawn_performance.md).
+[OpenStack tracing](docs/openstack_tracing_mcp.md), [VM spawn performance](docs/vm_spawn_performance.md),
+[log spikes](docs/log_spikes.md).
 
 ### 2.2 Role agents: RUBIN v1.5 workflows
 
 The three Kiro agents in `.kiro/agents/` share an evidence-calibrated core and differ by role.
-They may only call the five rubin tools (no shell, file or web access).
+They may only call the six rubin tools (no shell, file or web access).
 
 **Shared core (all roles):**
 - **Evidence integrity:** every number comes from a tool result in the session and is tagged E1,
@@ -176,14 +178,14 @@ They may only call the five rubin tools (no shell, file or web access).
   claimed from complete, filtered aggregations, never from a handful of search results.
 - **Causality gate:** timing, shared identifiers or FATAL labels alone never establish a root
   cause.
-- Built-in knowledge of search accuracy, OpenStack request/VM tracing, VM spawn analytics and
-  evidence-based prioritisation.
+- Built-in knowledge of search accuracy, OpenStack request/VM tracing, VM spawn analytics, BGL
+  spike detection and evidence-based prioritisation.
 
 | Role | Focus | Typical tool flow | Answer shape |
 |---|---|---|---|
-| **Engineer** | Specific failures, affected nodes/instances/requests, event sequences | `search_logs` → pick real records → `get_nearby_events`; OpenStack pivots on real `request_id`/`instance_id`; spawn outliers via `analyze_vm_spawn_performance` | main finding, tagged evidence, plausible mechanism vs. uncertainty, 2–3 concrete diagnostic checks |
-| **Team lead** | Recurrence of specific patterns, trends, owning teams, investigation order | `summarize_logs` with a pattern `query` and `group_by=time`/`component`/`team`; spawn trends via time buckets | pattern/trend finding, counts and scope, fictional ownership, coordinated next checks and ordering |
-| **Manager** | Priorities and decisions under uncertainty | population-level `summarize_logs` and `analyze_vm_spawn_performance`, few raw lines | recommended priority, 2–3 evidence points, impact marked unverified unless established, one next action |
+| **Engineer** | Specific failures, affected nodes/instances/requests, event sequences | `search_logs` → pick real records → `get_nearby_events`; OpenStack pivots on real `request_id`/`instance_id`; spawn outliers via `analyze_vm_spawn_performance`; spikes via `detect_log_spikes` → evidence record → `get_nearby_events` | main finding, tagged evidence, plausible mechanism vs. uncertainty, 2–3 concrete diagnostic checks |
+| **Team lead** | Recurrence of specific patterns, trends, owning teams, investigation order | `summarize_logs` with a pattern `query` and `group_by=time`/`component`/`team`; spike windows per component and owning team; spawn trends via time buckets | pattern/trend finding, counts and scope, fictional ownership, coordinated next checks and ordering |
+| **Manager** | Priorities and decisions under uncertainty | population-level `summarize_logs`, `detect_log_spikes` and `analyze_vm_spawn_performance`, few raw lines | recommended priority, 2–3 evidence points, impact marked unverified unless established, one next action |
 
 ### 2.3 Agent UI
 
@@ -265,6 +267,11 @@ not establish._
 | `agent-ui` (profile `agent`) | Node 22 + Kiro CLI 2.32.0 (pinned and checksummed). Role agents are mounted read-only from `.kiro/agents`. Kiro may only use rubin tools; the Kiro login lives in the `kiro-home` volume. |
 | `serene-ui` (profile `ui`), `psql` (profile `tools`) | Optional SQL browser and client for inspecting the database. |
 
+**Request flow:** agent UI → Kiro role agent → RUBIN MCP tools → parameterised, read-only SereneDB
+queries → structured evidence (results, complete counts, SQL, truncation) → agent answer and UI
+evidence cards. Other MCP clients enter at the MCP server. The SQL browser and `psql` are for
+inspection only and are not part of this path.
+
 **Data model:**
 
 | MCP field / feature | SQL |
@@ -294,6 +301,8 @@ not establish._
 
 ## 5. Known limitations
 
+- **Historical datasets only.** RUBIN analyses the loaded BGL (2005–2006) and OpenStack (2017)
+  corpora. It is not connected to live infrastructure and does not monitor or alert in real time.
 - **Ownership is fictional.** Team results show where to look, not who is accountable.
 - **Counts are log records, not incidents.** One failure can emit many lines; the agents say so.
 - **No causation from logs alone.** Proximity in time and shared identifiers show sequence and
@@ -301,16 +310,30 @@ not establish._
 - **No impact data.** The corpora contain no downtime, cost or customer information. The Manager
   agent marks operational impact as unverified instead of estimating it.
 - **Data scope:** BGL covers 2005-06-03 to 2006-01-04; OpenStack covers about three days
-  (2017-05-14 to 2017-05-17). BGL has no event IDs or templates (`event_id` is NULL). In
-  OpenStack, `instance_id` is set mainly on compute records, and several fields (e.g.
-  `latency_s`) are often empty. The UI lists such columns as "not available".
+  (2017-05-14 to 2017-05-17). `event_id` is NULL because the raw logs carry no normalised event
+  template. That does not prevent correlation: OpenStack records can be linked through
+  `request_id` and `instance_id`. `instance_id` is set mainly on compute records, and several
+  fields (e.g. `latency_s`) are often empty. The UI lists such columns as "not available".
+- **Incomplete observation coverage.** Gaps in the BGL logs (for example the missing day
+  2005-08-01) do not prove the system was idle; collection may have stopped. Spike analysis never
+  treats unobserved time buckets as zero and reports such gaps and exclusions.
+- **BGL clock ambiguity.** `ts` values have no timezone, and their offset from the stored epoch
+  is -7 h or -8 h depending on the period, with one mixed hour around 2005-10-30 01:00. Time
+  buckets use the source clock without assuming a timezone, and spike analysis excludes
+  mixed-offset buckets rather than guessing.
+- **Spike detection is heuristic, not incident detection.** `detect_log_spikes` flags unusually
+  high BGL log volume against configurable per-component baselines (default: empirical P99 × 1.5,
+  subject to a minimum count and enough baseline history). This is a screening comparison, not a
+  calibrated anomaly probability. Findings are not confirmed incidents or root causes, a spike
+  window is not an incident's start or end, and the default corpus baseline is retrospective, so
+  it may itself include abnormal periods.
 - **Spawn performance** measures the hypervisor's reported spawn duration, not full boot time or
   API latency. Bucket timestamps are completion times.
 - **The agent UI needs a Kiro account** (free Builder ID) and internet access, and uses Kiro
-  credits. It runs the official Kiro CLI over ACP and never calls Kiro's backend directly (Kiro's
-  billing FAQ permits "ACP compatible IDEs" and forbids third-party harnesses that bypass Kiro's
-  own interfaces). It has no authentication of its own and is bound to `127.0.0.1`; don't expose it.
-- **Agent answers are model output.** The SQL and counts in the evidence cards are the ground
-  truth to check them against.
+  credits. It has no authentication of its own and is meant for a trusted local machine: it is
+  bound to `127.0.0.1`, so don't expose its port without additional safeguards. How it drives the
+  official Kiro CLI is described in [agent-ui/README.md](agent-ui/README.md).
+- **Evidence over narration.** Agent answers are model-generated. Verify important claims
+  against the evidence cards: the executed SQL, complete counts and original source records.
 - **Optional extensions** (on-demand indexing, larger remote datasets, row-level security) are
   not part of this submission.

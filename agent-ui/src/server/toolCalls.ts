@@ -20,7 +20,7 @@ export class ToolCallTracker {
       title,
       server: meta?.mcpServerName ?? previous?.server ?? fromTitle?.[1] ?? null,
       tool: meta?.toolName ?? previous?.tool ?? fromTitle?.[2] ?? null,
-      status: (update.status as ToolCallStatus | null | undefined) ?? previous?.status ?? "pending",
+      status: isToolError(output?.text) ? "failed" : (update.status as ToolCallStatus | null | undefined) ?? previous?.status ?? "pending",
       input: cleanInput(update.rawInput) ?? previous?.input ?? null,
       output: output ? output.json : previous?.output ?? null,
       outputText: output ? output.text : previous?.outputText ?? null,
@@ -28,6 +28,11 @@ export class ToolCallTracker {
     this.calls.set(view.id, view);
     return view;
   }
+}
+
+/** Kiro reports MCP tool errors as completed calls whose text is the server's error message. */
+function isToolError(text: string | null | undefined): boolean {
+  return typeof text === "string" && /^Error executing tool\b/.test(text.trim());
 }
 
 function kiroMeta(update: { _meta?: Record<string, unknown> | null }): { toolName?: string; mcpServerName?: string } | null {

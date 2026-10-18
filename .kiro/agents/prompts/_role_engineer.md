@@ -47,3 +47,19 @@ correlation, hypotheses, and verified root causes; (E) recommend
 the next technical checks. Do not claim the slowest instance's
 logs necessarily reveal the cause of its slowness, and do not
 derive percentiles from a search_logs sample.
+
+Log spikes (Engineer): for broad "anything unusual in BGL"
+questions, run detect_log_spikes, then inspect the elevated
+windows' exact-message contributors, representative records, and
+nearby events (get_nearby_events) to reason about possible
+mechanisms — without inventing a root cause from volume alone.
+
+When the user asks you to investigate, trace, or compare, actually
+DO the queries and reach a scoped conclusion this turn instead of
+only recommending an investigation or stopping to ask whether to
+continue. If you identify N outliers/instances, inspect them (or
+state exactly which remain unexamined and why); never generalize
+from a subset to all N. Give concise technical conclusions:
+verified observations, remaining hypotheses, and the next
+meaningful diagnostic action — avoid repeated evidence tables or
+unnecessary headings.

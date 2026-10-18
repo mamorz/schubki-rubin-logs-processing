@@ -1,7 +1,7 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { AlertTriangle, Check, ChevronRight, Copy, Info, Loader2, Wrench, X } from "lucide-react";
 import { Highlight, themes } from "prism-react-renderer";
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type { ToolCallView } from "../../shared/events";
 import { useChat } from "../store";
 import { describeResult, humanize, type BarsView, type ResultModel, type Row, type SeriesView, type TableView } from "../../shared/toolResult";
@@ -234,15 +234,26 @@ function DataTable({ table }: { table: TableView }) {
   const timeKey = table.columns.find((c) => /timestamp|^ts$|_at$/i.test(c));
   const times = timeKey ? table.rows.map((r) => Date.parse(String(r[timeKey]))) : [];
   const showGap = table.chronological && !table.columns.some((c) => /gap/i.test(c));
+  const [expanded, setExpanded] = useState<Set<number>>(() => new Set());
+  const hasNested = table.nested.length > 0;
+  const span = table.columns.length + (table.chronological ? 1 : 0) + (showGap ? 1 : 0) + (hasNested ? 1 : 0);
+  const toggle = (i: number) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(i)) next.delete(i);
+      else next.add(i);
+      return next;
+    });
   return (
     <div>
       <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
         {table.label} <span className="font-normal normal-case">({table.rows.length}{table.chronological ? ", in time order" : ""})</span>
       </h4>
-      <div className="max-h-80 overflow-auto rounded-lg border border-slate-100 dark:border-slate-800">
+      <div className={`${hasNested ? "max-h-[36rem]" : "max-h-80"} overflow-auto rounded-lg border border-slate-100 dark:border-slate-800`}>
         <table className="w-full text-xs">
           <thead className="sticky top-0 z-10 bg-slate-50 text-left text-slate-500 dark:bg-slate-900">
             <tr>
+              {hasNested && <th className="w-6 px-0" aria-label="details" />}
               {table.chronological && <th className="w-6 px-0" aria-label="timeline" />}
               {table.columns.map((c) => (
                 <th key={c} className={`px-2 py-1 font-medium whitespace-nowrap ${numeric.has(c) ? "text-right" : ""}`}>{humanize(c)}</th>
@@ -254,11 +265,25 @@ function DataTable({ table }: { table: TableView }) {
             {table.rows.map((row, i) => {
               const flagged = isFlagged(row);
               const anchor = i === table.highlightRow;
+              const isOpen = expanded.has(i);
               return (
+                <Fragment key={i}>
                 <tr
-                  key={i}
                   className={`border-t border-slate-100 align-top dark:border-slate-800 ${anchor ? "bg-ruby-50 dark:bg-ruby-900/20" : flagged ? "bg-red-50/40 dark:bg-red-950/15" : ""}`}
                 >
+                  {hasNested && (
+                    <td className="w-6 px-0 py-0.5 text-center">
+                      <button
+                        type="button"
+                        onClick={() => toggle(i)}
+                        aria-expanded={isOpen}
+                        title={`${isOpen ? "Hide" : "Show"} ${table.nested.map(humanize).join(", ")}`}
+                        className="rounded p-0.5 text-slate-400 hover:bg-slate-100 hover:text-ruby-600 dark:hover:bg-slate-800"
+                      >
+                        <ChevronRight className={`size-3.5 transition ${isOpen ? "rotate-90" : ""}`} />
+                      </button>
+                    </td>
+                  )}
                   {table.chronological && (
                     <td
                       aria-hidden="true"
@@ -278,6 +303,19 @@ function DataTable({ table }: { table: TableView }) {
                     </td>
                   )}
                 </tr>
+                {isOpen && (
+                  <tr className="bg-slate-50/70 dark:bg-slate-900/60">
+                    <td colSpan={span} className="px-3 py-2 font-sans">
+                      <div className="space-y-3 border-l-2 border-ruby-500/50 pl-3">
+                        {table.nested.map((key) => {
+                          const model = describeResult({ [key]: row[key] });
+                          return model ? <ResultView key={key} model={model} /> : null;
+                        })}
+                      </div>
+                    </td>
+                  </tr>
+                )}
+                </Fragment>
               );
             })}
           </tbody>

@@ -58,3 +58,18 @@ describe("helpers", () => {
     expect(mcpHealthUrl("http://mcp-server:8000/mcp")).toBe("http://mcp-server:8000/healthz");
   });
 });
+
+describe("tool call status", () => {
+  it("marks MCP tool errors reported as completed by Kiro as failed", async () => {
+    const { ToolCallTracker } = await import("../src/server/toolCalls.js");
+    const tracker = new ToolCallTracker();
+    const view = tracker.apply({
+      toolCallId: "t1",
+      title: "Running: @rubin-log-insights/detect_log_spikes",
+      status: "completed",
+      rawOutput: { items: [{ Json: { content: [{ type: "text", text: "Error executing tool detect_log_spikes: 1 validation error" }] } }] },
+    });
+    expect(view.status).toBe("failed");
+    expect(view.outputText).toMatch(/^Error executing tool/);
+  });
+});
