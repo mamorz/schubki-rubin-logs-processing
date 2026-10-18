@@ -52,6 +52,8 @@ export class AgentSession {
   private sessionId: string | null = null;
   private busy = false;
   private closed = false;
+  /** True while session/load replays history the browser already shows. */
+  private replaying = false;
   private readonly tools = new ToolCallTracker();
 
   constructor(private readonly options: AgentSessionOptions) {}
@@ -60,7 +62,12 @@ export class AgentSession {
     return this.options.role;
   }
 
-  async start(): Promise<void> {
+  get id(): string | null {
+    return this.sessionId;
+  }
+
+  /** Starts the agent; with `resumeId` it reopens that saved session and returns true on success. */
+  async start(resumeId?: string): Promise<boolean> {
     const transport = this.options.transport();
     this.transport = transport;
     void transport.exited.then((reason) => {
@@ -78,8 +85,21 @@ export class AgentSession {
       clientCapabilities: { fs: { readTextFile: false, writeTextFile: false }, terminal: false },
       clientInfo: { name: "rubin-agent-ui", version: "0.1.0" },
     });
+    if (resumeId) {
+      this.replaying = true;
+      try {
+        await connection.loadSession({ sessionId: resumeId, cwd: this.options.cwd, mcpServers: [] });
+        this.sessionId = resumeId;
+        return true;
+      } catch {
+        // Unknown or expired session: fall through to a fresh one.
+      } finally {
+        this.replaying = false;
+      }
+    }
     const session = await connection.newSession({ cwd: this.options.cwd, mcpServers: [] });
     this.sessionId = session.sessionId;
+    return false;
   }
 
   async prompt(text: string): Promise<void> {
@@ -117,6 +137,7 @@ export class AgentSession {
   }
 
   private onUpdate({ update }: SessionNotification): void {
+    if (this.replaying) return;
     switch (update.sessionUpdate) {
       case "agent_message_chunk":
         if (update.content.type === "text") this.options.send({ type: "text", delta: update.content.text });
@@ -135,6 +156,7 @@ export class AgentSession {
 
   private onExtension(method: string, params: Record<string, unknown>): void {
     // Kiro reports credits per turn in its metadata extension.
+    if (this.replaying) return;
     if (!method.endsWith("kiro.dev/metadata") || !Array.isArray(params.meteringUsage)) return;
     const credits = params.meteringUsage.reduce(
       (sum: number, item: unknown) => sum + (typeof (item as { value?: unknown })?.value === "number" ? (item as { value: number }).value : 0),

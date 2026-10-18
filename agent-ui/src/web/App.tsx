@@ -3,7 +3,8 @@ import { useCallback, useEffect, useState } from "react";
 import type { RoleId, StatusResponse } from "../shared/events";
 import { api } from "./api";
 import { ChatThread, Composer } from "./components/Chat";
-import { EvidenceLedger, Header, RoleSwitcher, SignIn } from "./components/Panels";
+import { GemScroll } from "./components/GemScroll";
+import { EvidenceLedger, Header, SignIn } from "./components/Panels";
 import { useChat } from "./store";
 import { useAgentSocket } from "./useAgentSocket";
 
@@ -42,6 +43,11 @@ export function App() {
     if (next !== role) setRole(next);
   };
 
+  const onClear = () => {
+    useChat.getState().clear();
+    send({ type: "role", role });
+  };
+
   const onLogout = async () => {
     await api.logout();
     useChat.getState().clear();
@@ -58,16 +64,11 @@ export function App() {
       ) : (
         <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <section className="flex min-h-0 flex-col">
-            <div className="border-b border-slate-200 px-4 py-3 dark:border-slate-800">
-              <div className="mx-auto max-w-3xl">
-                <RoleSwitcher role={role} agents={status?.agents ?? []} onChange={onRole} />
-              </div>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-6">
+            <GemScroll className="min-h-0 flex-1" contentClassName="py-6 pl-4">
               <div className="mx-auto max-w-3xl">
                 <ChatThread onAsk={onAsk} />
               </div>
-            </div>
+            </GemScroll>
             <div className="px-4 pb-4">
               <div className="mx-auto max-w-3xl space-y-2">
                 {notice && (
@@ -80,6 +81,7 @@ export function App() {
                   disabled={connection === "connecting" || connection === "starting"}
                   busy={busy}
                   role={role}
+                  agents={status?.agents ?? []}
                   onRole={onRole}
                   onAsk={onAsk}
                   onCancel={() => send({ type: "cancel" })}
@@ -91,7 +93,7 @@ export function App() {
             </div>
           </section>
           <div className="hidden min-h-0 border-l border-slate-200 p-4 lg:flex lg:flex-col dark:border-slate-800">
-            <EvidenceLedger />
+            <EvidenceLedger onClear={onClear} />
           </div>
         </main>
       )}

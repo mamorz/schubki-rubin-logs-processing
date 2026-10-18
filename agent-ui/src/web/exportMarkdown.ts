@@ -1,5 +1,5 @@
 import { ROLES } from "../shared/events";
-import { classifyRubinResult, executedQueries, resultHeadline } from "../shared/rubin";
+import { describeResult } from "../shared/toolResult";
 import type { Turn } from "./store";
 import type { ToolCallView } from "../shared/events";
 
@@ -12,11 +12,11 @@ export function sessionToMarkdown(turns: Turn[], toolCalls: Record<string, ToolC
     turn.toolCallIds.forEach((id, index) => {
       const call = toolCalls[id];
       if (!call) return;
-      const result = classifyRubinResult(call.tool, call.output);
+      const model = describeResult(call.output);
       lines.push(`### Tool call ${index + 1}: \`${call.tool ?? call.title}\``, ``);
       lines.push("```json", JSON.stringify(call.input ?? {}, null, 2), "```", ``);
-      if (result.kind !== "unknown") lines.push(`**Result:** ${resultHeadline(result)}`, ``);
-      for (const query of executedQueries(result)) {
+      if (model) lines.push(`**Result:** ${model.headline}`, ``);
+      for (const query of model?.sql ?? []) {
         lines.push(`SQL (${query.name}), parameters \`${JSON.stringify(query.parameters)}\`:`, ``, "```sql", query.sql.trim(), "```", ``);
       }
     });

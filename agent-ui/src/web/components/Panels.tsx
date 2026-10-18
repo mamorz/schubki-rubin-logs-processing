@@ -1,15 +1,12 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
-import * as Tabs from "@radix-ui/react-tabs";
-import { BarChart3, ChevronRight, Download, ExternalLink, FileSearch, Folder, KeyRound, Loader2, LogOut, ShieldCheck, Trash2, Wrench } from "lucide-react";
+import { ChevronRight, Download, ExternalLink, FileSearch, Folder, KeyRound, Loader2, LogOut, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { ROLES, type AgentInfo, type RoleId, type StatusResponse, type ToolCallView } from "../../shared/events";
+import { ROLES, type RoleId, type StatusResponse, type ToolCallView } from "../../shared/events";
 import { api } from "../api";
-import { classifyRubinResult, resultHeadline } from "../../shared/rubin";
+import { describeResult } from "../../shared/toolResult";
 import { download, sessionToMarkdown } from "../exportMarkdown";
 import { useChat, type ConnectionState, type Turn } from "../store";
 import { TruncationBadge } from "./ToolCallCard";
-
-const ROLE_ICONS: Record<RoleId, typeof Wrench> = { engineer: Wrench, "team-lead": BarChart3, manager: ShieldCheck };
 
 export function Header({ status, connection, onLogout }: {
   status: StatusResponse | null;
@@ -50,33 +47,9 @@ function Health({ label, ok, busy, title }: { label: string; ok: boolean | null;
   );
 }
 
-export function RoleSwitcher({ role, agents, onChange }: { role: RoleId; agents: AgentInfo[]; onChange: (role: RoleId) => void }) {
-  return (
-    <Tabs.Root value={role} onValueChange={(value) => onChange(value as RoleId)}>
-      <Tabs.List className="grid grid-cols-3 gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-800/70" aria-label="Role">
-        {ROLES.map((r) => {
-          const Icon = ROLE_ICONS[r.id];
-          const source = agents.find((a) => a.role === r.id)?.source;
-          return (
-            <Tabs.Trigger
-              key={r.id}
-              value={r.id}
-              title={`${r.summary}${source ? ` (agent: ${source})` : ""}`}
-              className="flex items-center justify-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-slate-600 transition data-[state=active]:bg-white data-[state=active]:text-ruby-700 data-[state=active]:shadow-sm dark:text-slate-300 dark:data-[state=active]:bg-slate-900 dark:data-[state=active]:text-ruby-400"
-            >
-              <Icon className="size-4" /> <span>{r.label}</span>
-            </Tabs.Trigger>
-          );
-        })}
-      </Tabs.List>
-    </Tabs.Root>
-  );
-}
-
-export function EvidenceLedger() {
+export function EvidenceLedger({ onClear }: { onClear: () => void }) {
   const turns = useChat((s) => s.turns);
   const toolCalls = useChat((s) => s.toolCalls);
-  const clear = useChat((s) => s.clear);
   const completedOf = (turn: Turn) =>
     turn.toolCallIds.map((id) => toolCalls[id]).filter((c): c is NonNullable<typeof c> => c?.status === "completed");
   const total = turns.reduce((sum, turn) => sum + completedOf(turn).length, 0);
@@ -98,7 +71,7 @@ export function EvidenceLedger() {
           >
             <Download className="size-3.5" /> Export
           </button>
-          <button type="button" className="btn-ghost px-2 py-1 text-xs" disabled={turns.length === 0} onClick={clear} title="Clear conversation view">
+          <button type="button" className="btn-ghost px-2 py-1 text-xs" disabled={turns.length === 0} onClick={onClear} title="Clear the conversation and start fresh agent sessions">
             <Trash2 className="size-3.5" />
           </button>
         </div>
@@ -155,15 +128,15 @@ function LedgerEntries({ calls, compact = false }: { calls: ToolCallView[]; comp
   return (
     <ol className="space-y-2">
       {calls.map((call, index) => {
-        const result = classifyRubinResult(call.tool, call.output);
+        const model = describeResult(call.output);
         return (
           <li key={call.id} className={compact ? "rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50" : "panel p-3"}>
             <div className="flex items-center gap-2">
               <span className="grid size-5 place-items-center rounded-full bg-slate-100 text-[11px] font-semibold dark:bg-slate-800">{index + 1}</span>
               <span className="font-mono text-xs font-medium">{call.tool}</span>
-              <span className="ml-auto"><TruncationBadge result={result} /></span>
+              <span className="ml-auto"><TruncationBadge model={model} /></span>
             </div>
-            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{resultHeadline(result)}</p>
+            <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{model?.headline ?? "no structured result"}</p>
             {call.input && (
               <p className="mt-1 truncate font-mono text-[11px] text-slate-500" title={JSON.stringify(call.input)}>
                 {JSON.stringify(call.input)}

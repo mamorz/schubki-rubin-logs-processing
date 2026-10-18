@@ -1,58 +1,61 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { AlertTriangle, BarChart3, Check, ChevronRight, Clock, Copy, Database, Loader2, Search, X } from "lucide-react";
+import { AlertTriangle, Check, ChevronRight, Copy, Info, Loader2, Wrench, X } from "lucide-react";
 import { Highlight, themes } from "prism-react-renderer";
 import { useState } from "react";
 import type { ToolCallView } from "../../shared/events";
-import {
-  classifyRubinResult,
-  executedQueries,
-  resultHeadline,
-  type AggregationResult,
-  type NearbyResult,
-  type RubinResult,
-  type SearchResult,
-} from "../../shared/rubin";
+import { describeResult, humanize, type BarsView, type ResultModel, type Row, type TableView } from "../../shared/toolResult";
 
-const TOOL_ICONS: Record<string, typeof Search> = {
-  search_logs: Search,
-  summarize_logs: BarChart3,
-  get_nearby_events: Clock,
-};
-
+/** Renders any MCP tool call from the shape of its result; no per-tool code. */
 export function ToolCallCard({ call, defaultOpen = false }: { call: ToolCallView; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
-  const result = call.status === "completed" ? classifyRubinResult(call.tool, call.output) : null;
-  const Icon = TOOL_ICONS[call.tool ?? ""] ?? Database;
+  const model = call.status === "completed" ? describeResult(call.output) : null;
   return (
     <Collapsible.Root open={open} onOpenChange={setOpen} className="panel overflow-hidden">
       <Collapsible.Trigger className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60">
         <ChevronRight className={`size-4 shrink-0 text-slate-400 transition ${open ? "rotate-90" : ""}`} />
-        <Icon className="size-4 shrink-0 text-ruby-600 dark:text-ruby-400" />
+        <Wrench className="size-4 shrink-0 text-ruby-600 dark:text-ruby-400" />
         <span className="font-mono text-sm font-medium">{call.tool ?? call.title}</span>
         <span className="hidden min-w-0 flex-1 truncate font-mono text-xs text-slate-500 sm:block">{formatArgs(call.input)}</span>
         <span className="ml-auto flex shrink-0 items-center gap-2">
-          {result && result.kind !== "unknown" && <TruncationBadge result={result} />}
+          <TruncationBadge model={model} />
           <StatusIcon status={call.status} />
         </span>
       </Collapsible.Trigger>
-      {result && result.kind !== "unknown" && (
-        <p className="border-t border-slate-100 px-3 py-1.5 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">
-          {resultHeadline(result)}
-        </p>
+      {model?.headline && (
+        <p className="border-t border-slate-100 px-3 py-1.5 text-xs text-slate-600 dark:border-slate-800 dark:text-slate-400">{model.headline}</p>
       )}
       <Collapsible.Content className="space-y-3 border-t border-slate-100 p-3 dark:border-slate-800">
         {call.input && <KeyValues title="Arguments" values={call.input} />}
-        {result?.kind === "search" && <SearchView data={result.data} />}
-        {result?.kind === "aggregation" && <AggregationView data={result.data} />}
-        {result?.kind === "nearby" && <NearbyView data={result.data} />}
-        {result && executedQueries(result).map((q) => <SqlBlock key={q.name} name={q.name} sql={q.sql} parameters={q.parameters} />)}
-        {(result?.kind === "unknown" || call.outputText) && (
-          <pre className="max-h-64 overflow-auto rounded-lg bg-slate-100 p-2 font-mono text-xs dark:bg-slate-800">
-            {call.outputText ?? JSON.stringify(call.output, null, 2)}
-          </pre>
-        )}
+        {model ? <ResultView model={model} /> : call.status === "completed" && <RawOutput call={call} />}
+        {model && call.outputText && <RawOutput call={call} />}
       </Collapsible.Content>
     </Collapsible.Root>
+  );
+}
+
+function ResultView({ model }: { model: ResultModel }) {
+  return (
+    <>
+      {model.stats.length > 0 && <Stats items={model.stats} />}
+      {model.bars.map((bars) => <BarList key={bars.key} bars={bars} />)}
+      {model.tables.map((table) => <DataTable key={table.key} table={table} />)}
+      {model.notes.map((note) => (
+        <p key={note.label} className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+          <AlertTriangle className="mt-0.5 size-3 shrink-0" />
+          <span><span className="font-medium">{note.label}:</span> {note.text}</span>
+        </p>
+      ))}
+      {model.details.map((detail) => <KeyValues key={detail.label} title={detail.label} values={detail.values} />)}
+      {model.sql.map((query) => <SqlBlock key={query.name} name={query.name} sql={query.sql} parameters={query.parameters} />)}
+    </>
+  );
+}
+
+function RawOutput({ call }: { call: ToolCallView }) {
+  return (
+    <pre className="max-h-64 overflow-auto rounded-lg bg-slate-100 p-2 font-mono text-xs dark:bg-slate-800">
+      {call.outputText ?? JSON.stringify(call.output, null, 2)}
+    </pre>
   );
 }
 
@@ -62,9 +65,9 @@ function StatusIcon({ status }: { status: ToolCallView["status"] }) {
   return <Loader2 className="size-4 animate-spin text-slate-400" aria-label="running" />;
 }
 
-export function TruncationBadge({ result }: { result: RubinResult }) {
-  if (result.kind === "unknown" || result.kind === "nearby") return null;
-  return result.data.truncated ? (
+export function TruncationBadge({ model }: { model: ResultModel | null }) {
+  if (!model || model.truncated === null) return null;
+  return model.truncated ? (
     <span className="chip bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
       <AlertTriangle className="size-3" /> truncated
     </span>
@@ -81,12 +84,14 @@ function formatArgs(input: Record<string, unknown> | null): string {
     .join("  ");
 }
 
-function KeyValues({ title, values }: { title: string; values: Record<string, unknown> }) {
+function KeyValues({ title, values }: { title: string; values: Row }) {
   const entries = Object.entries(values).filter(([, v]) => v !== null && v !== undefined);
   if (entries.length === 0) return null;
   return (
     <div>
-      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{title}</h4>
+      <h4 className="mb-1 flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <Info className="size-3" /> {title}
+      </h4>
       <dl className="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 font-mono text-xs">
         {entries.map(([k, v]) => (
           <div key={k} className="contents">
@@ -102,98 +107,85 @@ function KeyValues({ title, values }: { title: string; values: Record<string, un
 const SEVERITY_STYLES: Record<string, string> = {
   FATAL: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   FAILURE: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+  CRITICAL: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
   SEVERE: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
   ERROR: "bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300",
   WARNING: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  WARN: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
 };
 
-function Severity({ value }: { value: unknown }) {
-  const text = String(value ?? "");
-  return <span className={`chip ${SEVERITY_STYLES[text.toUpperCase()] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>{text}</span>;
+const BADGE_COLUMN = /severity|level|status/i;
+const TIME_COLUMN = /timestamp|time$|^ts$|_at$/i;
+const WIDE_COLUMN = /message|text|description/i;
+const OFFSET_COLUMN = /seconds|offset|gap|latency/i;
+
+function Cell({ column, value }: { column: string; value: unknown }) {
+  if (value === null || value === undefined) return <span className="text-slate-300 dark:text-slate-600">–</span>;
+  if (BADGE_COLUMN.test(column) && typeof value === "string") {
+    return <span className={`chip ${SEVERITY_STYLES[value.toUpperCase()] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>{value}</span>;
+  }
+  if (TIME_COLUMN.test(column) && typeof value === "string") return <span className="whitespace-nowrap">{value.replace("T", " ")}</span>;
+  if (typeof value === "number") {
+    const signed = OFFSET_COLUMN.test(column) && value > 0 ? "+" : "";
+    return <>{signed}{value.toLocaleString("en-US", { maximumFractionDigits: 3 })}</>;
+  }
+  if (typeof value === "boolean") return <>{value ? "yes" : "no"}</>;
+  return <>{String(value)}</>;
 }
 
-function RecordsTable({ rows, anchorId }: { rows: Record<string, unknown>[]; anchorId?: unknown }) {
-  if (rows.length === 0) return <p className="text-xs text-slate-500">No records.</p>;
-  const hasOffset = rows.some((r) => "seconds_from_anchor" in r);
+function DataTable({ table }: { table: TableView }) {
+  const numeric = new Set(table.columns.filter((c) => table.rows.every((r) => r[c] === null || typeof r[c] === "number")));
   return (
-    <div className="max-h-80 overflow-auto rounded-lg border border-slate-100 dark:border-slate-800">
-      <table className="w-full text-xs">
-        <thead className="sticky top-0 bg-slate-50 text-left text-slate-500 dark:bg-slate-900">
-          <tr>
-            <th className="px-2 py-1 font-medium">record_id</th>
-            <th className="px-2 py-1 font-medium">timestamp</th>
-            {hasOffset && <th className="px-2 py-1 text-right font-medium">Δs</th>}
-            <th className="px-2 py-1 font-medium">component</th>
-            <th className="px-2 py-1 font-medium">severity</th>
-            <th className="px-2 py-1 font-medium">message</th>
-          </tr>
-        </thead>
-        <tbody className="font-mono">
-          {rows.map((row, i) => (
-            <tr
-              key={`${String(row.record_id)}-${i}`}
-              className={`border-t border-slate-100 align-top dark:border-slate-800 ${row.record_id === anchorId ? "bg-ruby-50 dark:bg-ruby-900/20" : ""}`}
-            >
-              <td className="px-2 py-1 tabular-nums">{String(row.record_id)}</td>
-              <td className="whitespace-nowrap px-2 py-1 tabular-nums">{String(row.timestamp ?? "").replace("T", " ")}</td>
-              {hasOffset && <td className="px-2 py-1 text-right tabular-nums">{formatOffset(row.seconds_from_anchor)}</td>}
-              <td className="px-2 py-1">{String(row.component ?? "")}</td>
-              <td className="px-2 py-1"><Severity value={row.severity} /></td>
-              <td className="min-w-64 px-2 py-1 font-sans">{String(row.message ?? "")}</td>
+    <div>
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {table.label} <span className="font-normal normal-case">({table.rows.length})</span>
+      </h4>
+      <div className="max-h-80 overflow-auto rounded-lg border border-slate-100 dark:border-slate-800">
+        <table className="w-full text-xs">
+          <thead className="sticky top-0 bg-slate-50 text-left text-slate-500 dark:bg-slate-900">
+            <tr>
+              {table.columns.map((c) => (
+                <th key={c} className={`px-2 py-1 font-medium whitespace-nowrap ${numeric.has(c) ? "text-right" : ""}`}>{humanize(c)}</th>
+              ))}
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody className="font-mono">
+            {table.rows.map((row, i) => (
+              <tr
+                key={i}
+                className={`border-t border-slate-100 align-top dark:border-slate-800 ${i === table.highlightRow ? "bg-ruby-50 dark:bg-ruby-900/20" : ""}`}
+              >
+                {table.columns.map((c) => (
+                  <td
+                    key={c}
+                    className={`px-2 py-1 ${numeric.has(c) ? "text-right tabular-nums" : ""} ${WIDE_COLUMN.test(c) ? "min-w-64 font-sans" : ""}`}
+                  >
+                    <Cell column={c} value={row[c]} />
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
 
-function formatOffset(value: unknown): string {
-  return typeof value === "number" ? `${value > 0 ? "+" : ""}${value.toFixed(3)}` : "";
-}
-
-function SearchView({ data }: { data: SearchResult }) {
+function BarList({ bars }: { bars: BarsView }) {
+  const max = Math.max(1, ...bars.rows.map((r) => Number(r[bars.countKey] ?? 0)));
   return (
-    <div className="space-y-2">
-      <Stats
-        items={[
-          ["dataset", data.provenance.dataset],
-          ["match mode", data.match_mode ?? "any"],
-          ["returned", data.returned_record_count.toLocaleString("en-US")],
-          ["total matches in corpus", data.total_corpus_match_count.toLocaleString("en-US")],
-        ]}
-      />
-      <RecordsTable rows={data.records} />
-    </div>
-  );
-}
-
-function groupLabel(group: Record<string, unknown>): string {
-  return Object.entries(group)
-    .filter(([k]) => k !== "record_count")
-    .map(([, v]) => (v === null ? "∅" : String(v)))
-    .join(" · ");
-}
-
-function AggregationView({ data }: { data: AggregationResult }) {
-  const max = Math.max(1, ...data.groups.map((g) => Number(g.record_count ?? 0)));
-  const coverage = data.mapping_coverage;
-  return (
-    <div className="space-y-2">
-      <Stats
-        items={[
-          ["dataset", data.dataset],
-          ["group by", [data.group_by, data.interval].filter(Boolean).join(" / ") || data.aggregation_type],
-          ["records in scope", data.total_matching_record_count.toLocaleString("en-US")],
-          ["unit", data.scope.count_unit],
-        ]}
-      />
+    <div>
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {bars.label} <span className="font-normal normal-case">by {humanize(bars.countKey)}</span>
+      </h4>
       <ul className="space-y-1">
-        {data.groups.map((group, i) => {
-          const count = Number(group.record_count ?? 0);
+        {bars.rows.map((row, i) => {
+          const count = Number(row[bars.countKey] ?? 0);
+          const label = bars.labelKeys.map((k) => (row[k] === null ? "∅" : String(row[k]))).join(" · ");
           return (
             <li key={i} className="grid grid-cols-[minmax(8rem,14rem)_1fr_auto] items-center gap-2 text-xs">
-              <span className="truncate font-mono" title={groupLabel(group)}>{groupLabel(group)}</span>
+              <span className="truncate font-mono" title={label}>{label}</span>
               <span className="h-2 rounded-full bg-slate-100 dark:bg-slate-800">
                 <span className="block h-2 rounded-full bg-ruby-500" style={{ width: `${Math.max(1, (count / max) * 100)}%` }} />
               </span>
@@ -202,41 +194,24 @@ function AggregationView({ data }: { data: AggregationResult }) {
           );
         })}
       </ul>
-      {coverage && <KeyValues title="Ownership mapping coverage" values={coverage} />}
-      {data.provenance.fictional_ownership && (
-        <p className="text-xs text-slate-500">Team ownership is a fictional hackathon mapping, not an organisational fact.</p>
-      )}
     </div>
   );
 }
 
-function NearbyView({ data }: { data: NearbyResult }) {
-  if (data.status !== "ok" || !data.anchor) return <p className="text-xs text-amber-700">Anchor record not found.</p>;
-  const rows = [...data.before_events, data.anchor, ...data.after_events];
-  return (
-    <div className="space-y-2">
-      <RecordsTable rows={rows} anchorId={data.anchor.record_id} />
-      <p className="flex items-center gap-1 text-xs text-amber-700 dark:text-amber-400">
-        <AlertTriangle className="size-3" /> {data.causation_warning}
-      </p>
-    </div>
-  );
-}
-
-function Stats({ items }: { items: [string, string][] }) {
+function Stats({ items }: { items: ResultModel["stats"] }) {
   return (
     <dl className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-      {items.map(([label, value]) => (
-        <div key={label} className="rounded-lg bg-slate-50 px-2 py-1.5 dark:bg-slate-800/60">
-          <dt className="text-[11px] uppercase tracking-wide text-slate-500">{label}</dt>
-          <dd className="truncate font-mono text-sm" title={value}>{value}</dd>
+      {items.map((item) => (
+        <div key={item.key} className="rounded-lg bg-slate-50 px-2 py-1.5 dark:bg-slate-800/60">
+          <dt className="truncate text-[11px] uppercase tracking-wide text-slate-500" title={item.label}>{item.label}</dt>
+          <dd className="truncate font-mono text-sm" title={item.value}>{item.value}</dd>
         </div>
       ))}
     </dl>
   );
 }
 
-export function SqlBlock({ name, sql, parameters }: { name: string; sql: string; parameters: Record<string, unknown> }) {
+export function SqlBlock({ name, sql, parameters }: { name: string; sql: string; parameters: Row }) {
   const [copied, setCopied] = useState(false);
   const dark = document.documentElement.classList.contains("dark");
   const copy = async () => {
@@ -247,7 +222,7 @@ export function SqlBlock({ name, sql, parameters }: { name: string; sql: string;
   return (
     <div className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
       <div className="flex items-center justify-between bg-slate-50 px-2 py-1 text-xs dark:bg-slate-800">
-        <span className="font-semibold uppercase tracking-wide text-slate-500">SQL · {name.replace(/_/g, " ")}</span>
+        <span className="font-semibold uppercase tracking-wide text-slate-500">SQL · {humanize(name)}</span>
         <button type="button" onClick={copy} className="btn-ghost px-1.5 py-0.5 text-xs" aria-label="Copy SQL">
           {copied ? <Check className="size-3" /> : <Copy className="size-3" />} {copied ? "copied" : "copy"}
         </button>

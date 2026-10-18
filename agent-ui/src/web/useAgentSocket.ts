@@ -31,7 +31,7 @@ export function useAgentSocket(enabled: boolean, role: RoleId) {
       socketRef.current = socket;
       socket.onopen = () => {
         retry = 0;
-        socket.send(JSON.stringify({ type: "role", role: roleRef.current } satisfies ClientMessage));
+        socket.send(JSON.stringify(roleMessage(roleRef.current)));
       };
       socket.onmessage = (event) => receive(JSON.parse(String(event.data)) as ServerMessage);
       socket.onclose = () => {
@@ -52,8 +52,14 @@ export function useAgentSocket(enabled: boolean, role: RoleId) {
   useEffect(() => {
     if (roleRef.current === role) return;
     roleRef.current = role;
-    send({ type: "role", role });
+    send(roleMessage(role));
   }, [role, send]);
 
   return send;
+}
+
+/** Asks for the role's agent, reopening its saved Kiro session when there is one. */
+export function roleMessage(role: RoleId): ClientMessage {
+  const resume = useChat.getState().agentSessions[role];
+  return resume ? { type: "role", role, resume } : { type: "role", role };
 }

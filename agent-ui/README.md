@@ -37,14 +37,30 @@ browser ──WS /api/session──▶ Fastify (src/server) ──stdio ACP─�
                                                         mcp-server:8000/mcp ──▶ SereneDB
 ```
 
-- One `kiro-cli acp` process per browser tab and role. Switching role starts a fresh session.
-  Idle processes stop after 30 minutes.
+- One `kiro-cli acp` process per browser tab and active role. Idle processes stop after 30 minutes.
+- **History survives reloads without a database.** The browser keeps the conversation (last 40
+  requests and their tool results) in `localStorage`, together with the Kiro session ID of each role.
+  After a reload, an idle stop or a role switch, the bridge reopens that session with ACP
+  `session/load`. Kiro keeps sessions in the `kiro-home` volume, so the agent also remembers the
+  context. History Kiro replays during the load is not sent to the browser a second time. The
+  ledger's clear button wipes both and starts fresh sessions.
+- Each answer is a workflow log in the order the agent worked: reasoning steps and tool calls on
+  a timeline, followed by the answer text. The log folds automatically after 5 tool calls.
 - The bridge (`src/server/acpBridge.ts`) uses the official `@agentclientprotocol/sdk`. It
   offers **no** file system or terminal capabilities to the agent, and its permission
   handler allows only `rubin-log-insights` tools.
 - Kiro wraps MCP results as `rawOutput.items[].Json.content[].text`. `src/server/toolCalls.ts`
-  unwraps them, and `src/shared/rubin.ts` parses the three rubin result shapes from
-  `log_insights/tools.py`.
+  unwraps them.
+- **Tool cards are generic.** `src/shared/toolResult.ts` describes any JSON result by its
+  shape, never by tool name:
+  - arrays of flat objects become tables, with columns discovered and all-empty ones dropped
+  - label plus `*count` rows become bar lists
+  - `executed_sql` with sibling `parameters` becomes highlighted SQL blocks
+  - `truncated` becomes the badge
+  - an object between `before_*` / `after_*` arrays becomes a highlighted timeline
+  - `*warning` / `*note` strings become notes, and scalars become stat tiles
+
+  New MCP tools and new fields render without UI changes as long as they follow these conventions.
 - Credits per turn come from Kiro's `_kiro.dev/metadata` extension notification.
 
 ## Role agents: contract with the agent definitions

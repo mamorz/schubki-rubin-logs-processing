@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { Stream } from "@agentclientprotocol/sdk";
 import { AgentSession, type AgentTransport } from "../src/server/acpBridge.js";
 import type { ServerMessage, ToolCallView } from "../src/shared/events.js";
-import { classifyRubinResult, executedQueries } from "../src/shared/rubin.js";
+import { describeResult } from "../src/shared/toolResult.js";
 
 type Wire = { id?: number | string; method?: string; result?: unknown; params?: unknown };
 
@@ -85,9 +85,54 @@ describe("AgentSession with recorded Kiro ACP traffic", () => {
       expect(call.server).toBe("rubin-log-insights");
       expect(call.status).toBe("completed");
       expect(call.input).not.toHaveProperty("__tool_use_purpose");
-      const result = classifyRubinResult(call.tool, call.output);
-      expect(result.kind).not.toBe("unknown");
-      expect(executedQueries(result).length).toBeGreaterThan(0);
+      const model = describeResult(call.output);
+      expect(model).not.toBeNull();
+      expect(model!.sql.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("AgentSession resume", () => {
+  function resumeTransport(loadFails: boolean): AgentTransport {
+    let push: (message: Wire) => void = () => undefined;
+    const readable = new ReadableStream({ start: (c) => { push = (m) => c.enqueue(m); } });
+    const writable = new WritableStream({
+      write(message: Wire) {
+        if (message.id === undefined || !message.method) return;
+        if (message.method === "initialize") {
+          push({ jsonrpc: "2.0", id: message.id, result: { protocolVersion: 1, agentCapabilities: { loadSession: true } } } as Wire);
+        } else if (message.method === "session/load") {
+          // Kiro replays the earlier conversation before answering session/load.
+          push({ jsonrpc: "2.0", method: "session/update", params: { sessionId: "old", update: { sessionUpdate: "agent_message_chunk", content: { type: "text", text: "replayed" } } } } as Wire);
+          push(loadFails
+            ? ({ jsonrpc: "2.0", id: message.id, error: { code: -32002, message: "not found" } } as Wire)
+            : ({ jsonrpc: "2.0", id: message.id, result: {} } as Wire));
+        } else if (message.method === "session/new") {
+          push({ jsonrpc: "2.0", id: message.id, result: { sessionId: "fresh" } } as Wire);
+        }
+      },
+    });
+    return { stream: { readable, writable } as unknown as Stream, exited: new Promise(() => undefined), close: () => undefined };
+  }
+
+  async function start(loadFails: boolean) {
+    const sent: ServerMessage[] = [];
+    const session = new AgentSession({
+      role: "manager", agent: "manager", cwd: "/workspace", mcpServerName: "rubin-log-insights",
+      send: (m) => sent.push(m), transport: () => resumeTransport(loadFails),
+    });
+    const resumed = await session.start("old");
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    return { resumed, id: session.id, sent };
+  }
+
+  it("reopens the saved session without re-sending replayed history", async () => {
+    const result = await start(false);
+    expect(result).toMatchObject({ resumed: true, id: "old" });
+    expect(result.sent.filter((m) => m.type === "text")).toEqual([]);
+  });
+
+  it("falls back to a fresh session when the saved one is gone", async () => {
+    expect(await start(true)).toMatchObject({ resumed: false, id: "fresh" });
   });
 });

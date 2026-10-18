@@ -45,10 +45,18 @@ export interface ToolCallView {
 export type ClientMessage =
   | { type: "prompt"; text: string }
   | { type: "cancel" }
-  | { type: "role"; role: RoleId };
+  /** Starts the role's agent; `resume` reopens a saved Kiro session after a page reload. */
+  | { type: "role"; role: RoleId; resume?: string };
 
 export type ServerMessage =
-  | { type: "session"; role: RoleId; state: "starting" | "ready" | "closed"; agentSource?: AgentSource }
+  | {
+      type: "session";
+      role: RoleId;
+      state: "starting" | "ready" | "closed";
+      agentSource?: AgentSource;
+      sessionId?: string;
+      resumed?: boolean;
+    }
   | { type: "text"; delta: string }
   | { type: "thought"; delta: string }
   | { type: "toolCall"; call: ToolCallView }

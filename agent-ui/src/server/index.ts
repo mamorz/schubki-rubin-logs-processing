@@ -57,6 +57,7 @@ app.get("/healthz", async () => ({ status: "ok", service: "rubin-agent-ui" }));
 app.get("/api/session", { websocket: true }, (socket: WebSocket) => {
   let session: AgentSession | null = null;
   let lastRole: RoleId | null = null;
+  let lastSessionId: string | undefined;
   let idle: NodeJS.Timeout | undefined;
   const send = (message: ServerMessage) => {
     if (socket.readyState === socket.OPEN) socket.send(JSON.stringify(message));
@@ -64,14 +65,15 @@ app.get("/api/session", { websocket: true }, (socket: WebSocket) => {
   const touch = () => {
     clearTimeout(idle);
     idle = setTimeout(() => {
-      send({ type: "error", message: "Agent stopped after being idle; send a question to start again." });
+      send({ type: "error", message: "Agent paused after being idle; it resumes with your next question." });
       session?.close();
       session = null;
     }, config.idleTimeoutMs);
   };
 
-  const startRole = async (role: RoleId) => {
+  const startRole = async (role: RoleId, resume?: string) => {
     lastRole = role;
+    lastSessionId = resume;
     session?.close();
     const definition = ROLES.find((r) => r.id === role)!;
     const agents = await listAgents(config.workspace);
@@ -86,8 +88,9 @@ app.get("/api/session", { websocket: true }, (socket: WebSocket) => {
     });
     session = next;
     try {
-      await next.start();
-      if (session === next) send({ type: "session", role, state: "ready" });
+      const resumed = await next.start(resume);
+      lastSessionId = next.id ?? undefined;
+      if (session === next) send({ type: "session", role, state: "ready", sessionId: lastSessionId, resumed });
     } catch (error) {
       send({ type: "error", message: `Could not start the ${definition.label} agent: ${(error as Error).message}` });
       next.close();
@@ -105,9 +108,10 @@ app.get("/api/session", { websocket: true }, (socket: WebSocket) => {
     }
     try {
       if (message.type === "role" && isRoleId(message.role)) {
-        await startRole(message.role);
+        await startRole(message.role, typeof message.resume === "string" ? message.resume.slice(0, 200) : undefined);
       } else if (message.type === "prompt" && typeof message.text === "string" && message.text.trim()) {
-        if (!session && lastRole) await startRole(lastRole);
+        // After an idle stop, reopen the same Kiro session so the agent keeps its context.
+        if (!session && lastRole) await startRole(lastRole, lastSessionId);
         if (!session) return send({ type: "error", message: "Pick a role first." });
         await session.prompt(message.text.slice(0, 8000));
       } else if (message.type === "cancel") {

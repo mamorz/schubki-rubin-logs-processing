@@ -3,9 +3,9 @@ import { Brain, ChevronDown, ChevronRight, CircleStop, Coins, ListTree, SendHori
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { ROLES, type RoleId, type ToolCallView } from "../../shared/events";
+import { ROLES, type AgentInfo, type RoleId } from "../../shared/events";
 import { SUGGESTED_QUESTIONS } from "../questions";
-import { useChat, type Turn } from "../store";
+import { useChat, type Turn, type TurnItem } from "../store";
 import { ToolCallCard } from "./ToolCallCard";
 
 export function ChatThread({ onAsk }: { onAsk: (question: string) => void }) {
@@ -16,7 +16,7 @@ export function ChatThread({ onAsk }: { onAsk: (question: string) => void }) {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ block: "end" });
-  }, [turns.length, last?.text, last?.toolCallIds.length]);
+  }, [turns.length, last?.items.length, last?.text]);
 
   if (turns.length === 0) return <EmptyState role={role} onAsk={onAsk} />;
   return (
@@ -51,10 +51,29 @@ function EmptyState({ role, onAsk }: { role: RoleId; onAsk: (question: string) =
   );
 }
 
+type Segment = { kind: "workflow"; items: TurnItem[]; key: number } | { kind: "text"; text: string; key: number };
+
+/** Groups consecutive reasoning and tool steps into one workflow log; answer text stays inline. */
+function segment(items: TurnItem[]): Segment[] {
+  const segments: Segment[] = [];
+  items.forEach((item, index) => {
+    if (item.kind === "text") {
+      if (item.text.trim()) segments.push({ kind: "text", text: item.text, key: index });
+      return;
+    }
+    const last = segments[segments.length - 1];
+    if (last?.kind === "workflow") last.items.push(item);
+    else segments.push({ kind: "workflow", items: [item], key: index });
+  });
+  return segments;
+}
+
 function TurnView({ turn }: { turn: Turn }) {
-  const toolCalls = useChat((s) => s.toolCalls);
   const role = ROLES.find((r) => r.id === turn.role)!;
-  const thinking = !turn.done && !turn.text && turn.toolCallIds.length === 0;
+  const segments = segment(turn.items);
+  const lastItem = turn.items[turn.items.length - 1];
+  const waiting = !turn.done && lastItem?.kind !== "text";
+  const foldWorkflow = turn.toolCallIds.length > WORKFLOW_AUTO_FOLD_AFTER;
   return (
     <article className="space-y-3">
       <div className="flex justify-end">
@@ -64,24 +83,29 @@ function TurnView({ turn }: { turn: Turn }) {
         </div>
       </div>
 
-      {turn.thought && <Thought text={turn.thought} />}
+      {segments.map((seg, index) =>
+        seg.kind === "workflow" ? (
+          <WorkflowLog
+            key={seg.key}
+            items={seg.items}
+            autoFold={foldWorkflow}
+            live={!turn.done && index === segments.length - 1}
+          />
+        ) : (
+          <div key={seg.key} className="prose-answer">
+            <Markdown remarkPlugins={[remarkGfm]}>{seg.text}</Markdown>
+          </div>
+        ),
+      )}
 
-      {turn.toolCallIds.length > 0 && <EvidenceTrail ids={turn.toolCallIds} toolCalls={toolCalls} />}
-
-      {thinking && (
-        <div className="flex items-center gap-2 text-sm text-slate-500">
+      {waiting && (
+        <div className="flex items-center gap-2 pl-1 text-sm text-slate-500">
           <span className="flex gap-1">
             {[0, 1, 2].map((i) => (
               <span key={i} className="size-1.5 animate-bounce rounded-full bg-ruby-400" style={{ animationDelay: `${i * 120}ms` }} />
             ))}
           </span>
-          Kiro is thinking…
-        </div>
-      )}
-
-      {turn.text && (
-        <div className="prose-answer">
-          <Markdown remarkPlugins={[remarkGfm]}>{turn.text}</Markdown>
+          Kiro is working…
         </div>
       )}
 
@@ -101,49 +125,68 @@ function TurnView({ turn }: { turn: Turn }) {
   );
 }
 
-const TRAIL_AUTO_FOLD_AFTER = 5;
+const WORKFLOW_AUTO_FOLD_AFTER = 5;
 
-/** Tool-call cards of one turn; folds itself once more than five calls have arrived, unless the user toggled it. */
-function EvidenceTrail({ ids, toolCalls }: { ids: string[]; toolCalls: Record<string, ToolCallView> }) {
+/** Timeline of the agent's reasoning and tool calls, in the order they happened. */
+function WorkflowLog({ items, autoFold, live }: { items: TurnItem[]; autoFold: boolean; live: boolean }) {
+  const toolCalls = useChat((s) => s.toolCalls);
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
-  const open = userOpen ?? ids.length <= TRAIL_AUTO_FOLD_AFTER;
-  const running = ids.filter((id) => toolCalls[id]?.status !== "completed" && toolCalls[id]?.status !== "failed").length;
+  const open = userOpen ?? !autoFold;
+  const toolIds = items.flatMap((item) => (item.kind === "tool" ? [item.id] : []));
+  const running = toolIds.filter((id) => toolCalls[id]?.status !== "completed" && toolCalls[id]?.status !== "failed").length;
   return (
     <Collapsible.Root open={open} onOpenChange={setUserOpen}>
-      <Collapsible.Trigger className="mb-2 flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+      <Collapsible.Trigger className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
         <ChevronRight className={`size-3 transition ${open ? "rotate-90" : ""}`} />
-        <ListTree className="size-3" /> Evidence trail · {ids.length} tool call{ids.length === 1 ? "" : "s"}
+        <ListTree className="size-3" />
+        {live ? "Working" : "Agent workflow"} · {toolIds.length} tool call{toolIds.length === 1 ? "" : "s"}
         {running > 0 && <span className="text-amber-600">· {running} running</span>}
       </Collapsible.Trigger>
-      <Collapsible.Content className="space-y-2">
-        {ids.map((id) => {
-          const call = toolCalls[id];
-          return call ? <ToolCallCard key={id} call={call} /> : null;
-        })}
+      <Collapsible.Content>
+        <ol className="mt-2 ml-1.5 space-y-2 border-l-2 border-slate-200 pl-4 dark:border-slate-800">
+          {items.map((item, index) => (
+            <li key={index} className="relative">
+              <span
+                className={`absolute top-2 -left-[1.4rem] size-2.5 rounded-full ring-4 ring-slate-50 dark:ring-slate-950 ${
+                  item.kind === "tool" ? "bg-ruby-500" : "bg-slate-300 dark:bg-slate-600"
+                }`}
+              />
+              {item.kind === "thought" ? (
+                <ThoughtStep text={item.text} />
+              ) : item.kind === "tool" && toolCalls[item.id] ? (
+                <ToolCallCard call={toolCalls[item.id]!} />
+              ) : null}
+            </li>
+          ))}
+        </ol>
       </Collapsible.Content>
     </Collapsible.Root>
   );
 }
 
-function Thought({ text }: { text: string }) {
-  const [open, setOpen] = useState(false);
+function ThoughtStep({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const long = text.length > 280;
   return (
-    <Collapsible.Root open={open} onOpenChange={setOpen}>
-      <Collapsible.Trigger className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
-        <ChevronRight className={`size-3 transition ${open ? "rotate-90" : ""}`} />
-        <Brain className="size-3" /> Agent reasoning
-      </Collapsible.Trigger>
-      <Collapsible.Content className="mt-1 border-l-2 border-slate-200 pl-3 text-xs whitespace-pre-wrap text-slate-500 dark:border-slate-700">
-        {text}
-      </Collapsible.Content>
-    </Collapsible.Root>
+    <div className="flex gap-2 py-0.5 text-xs text-slate-500">
+      <Brain className="mt-0.5 size-3 shrink-0" />
+      <div className="min-w-0">
+        <p className={`whitespace-pre-wrap ${expanded || !long ? "" : "line-clamp-3"}`}>{text.trim()}</p>
+        {long && (
+          <button type="button" onClick={() => setExpanded(!expanded)} className="mt-0.5 text-[11px] font-medium text-ruby-600 hover:underline dark:text-ruby-400">
+            {expanded ? "Show less" : "Show more"}
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
-export function Composer({ disabled, busy, role, onRole, onAsk, onCancel }: {
+export function Composer({ disabled, busy, role, agents, onRole, onAsk, onCancel }: {
   disabled: boolean;
   busy: boolean;
   role: RoleId;
+  agents: AgentInfo[];
   onRole: (role: RoleId) => void;
   onAsk: (question: string) => void;
   onCancel: () => void;
@@ -179,9 +222,9 @@ export function Composer({ disabled, busy, role, onRole, onAsk, onCancel }: {
           onChange={(e) => onRole(e.target.value as RoleId)}
           disabled={busy}
           className="appearance-none rounded-lg border border-slate-200 bg-slate-50 py-2 pr-7 pl-2.5 text-sm font-medium text-slate-700 outline-none hover:border-ruby-300 focus-visible:border-ruby-500 disabled:opacity-50 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
-          title="Answer as this role"
+          title={`${ROLES.find((r) => r.id === role)?.summary ?? ""} (agent: ${agents.find((a) => a.role === role)?.source ?? "?"})`}
         >
-          {ROLES.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+          {ROLES.map((r) => <option key={r.id} value={r.id} title={r.summary}>{r.label}</option>)}
         </select>
         <ChevronDown className="pointer-events-none absolute top-1/2 right-2 size-3.5 -translate-y-1/2 text-slate-400" />
       </label>

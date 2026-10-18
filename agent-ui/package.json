@@ -19,7 +19,6 @@
     "@fastify/static": "10.1.5",
     "@fastify/websocket": "11.3.3",
     "@radix-ui/react-collapsible": "1.1.20",
-    "@radix-ui/react-tabs": "1.1.21",
     "fastify": "5.12.5",
     "lucide-react": "1.51.0",
     "prism-react-renderer": "2.4.1",
