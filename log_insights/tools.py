@@ -113,9 +113,16 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         returned message verbatim for exact lookup; empty messages are allowed.
         all: every query token must occur, in any order, without adjacency.
 
+        BGL filter-only search accepts omitted/null query with BOTH start_time
+        and end_time plus at least one of component or severity (the SQL level
+        column). Both filters may be combined. It returns records regardless of
+        message text, including empty messages. match_mode remains validated
+        but has no effect without query. A supplied query retains its normal
+        matching/validation rules; blank token queries are never filter-only.
+
         SQL-backed OpenStack also supports literal request_id and instance_id
-        equality filters, combined with AND. Omit query only when at least one
-        identifier is supplied; a supplied query additionally filters messages.
+        equality filters, combined with AND. For OpenStack, omit query only when
+        at least one identifier is supplied; a supplied query also filters messages.
         These filters are unavailable for BGL and sample tables. OpenStack SQL
         records include request_id, instance_id, service, http_status, latency_s,
         and is_anomaly; missing values remain null.

@@ -109,6 +109,44 @@ def sql_fixture():
     db.close()
 
 
+@pytest.mark.parametrize("filters,expected_ids", [
+    (dict(component="C", severity="ERROR"), [8, 9, 5]),
+    (dict(component="C"), [8, 9, 5, 7]),
+    (dict(severity="ERROR"), [8, 9, 5, 6]),
+    (dict(component="C", severity="INFO"), [7]),
+    (dict(component="missing"), []),
+    (dict(component="C' OR TRUE --"), []),
+    (dict(severity="ERROR' OR TRUE --"), []),
+])
+def test_bgl_filter_only_boundaries_order_counts_and_messages(sql_fixture, filters, expected_ids):
+    db, factory = sql_fixture
+    # Only this disposable in-memory SQLite fixture is populated, never SereneDB.
+    db.executemany(
+        "INSERT INTO bgl_logs (line_no, ts, epoch, is_alert, type, component, level, message) "
+        "VALUES (?, ?, 1, 0, 'RAS', ?, ?, ?)",
+        [(9, "2024-01-01 00:00:00", "C", "ERROR", "unrelated text"),
+         (8, "2024-01-01 00:00:00", "C", "ERROR", ""),
+         (5, "2024-01-01 00:00:01", "C", "ERROR", " \t"),
+         (7, "2024-01-01 00:00:02", "C", "INFO", "info"),
+         (6, "2024-01-01 00:00:03", "D", "ERROR", "other component"),
+         (4, "2024-01-01 01:00:00", "C", "ERROR", "exclusive end"),
+         (3, "2023-12-31 23:59:59.999999", "C", "ERROR", "before start")],
+    )
+    service = QueryService(factory, SQL_DATASET_SPECS)
+    args = dict(dataset="bgl", start_time=datetime(2024, 1, 1), end_time=datetime(2024, 1, 1, 1), **filters)
+    for limit in (1, 2, 50):
+        result = service.search_logs(**args, limit=limit)
+        assert [r["record_id"] for r in result.rows] == expected_ids[:limit]
+        assert result.total_corpus_match_count == len(expected_ids)
+        assert result.truncated is (len(expected_ids) > limit)
+    if filters == dict(component="C", severity="ERROR"):
+        assert [r["message"] for r in service.search_logs(**args).rows] == ["", "unrelated text", " \t"]
+        exact = service.search_logs(**args, text="", match_mode="exact")
+        assert [r["record_id"] for r in exact.rows] == [8]
+        first = service.search_logs(**args, limit=1).rows[0]
+        assert service.get_nearby_events(dataset="bgl", record_id=first["record_id"], before=1, after=1).anchor["record_id"] == 8
+
+
 def test_native_search_columns_filters_and_parameterization():
     plan = build_search_query_plan(
         dataset="openstack", text="instance' OR 1=1 --", severity="INFO",

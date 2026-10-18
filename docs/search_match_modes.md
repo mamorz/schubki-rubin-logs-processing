@@ -1,8 +1,8 @@
 # Search match modes
 
 `search_logs` adds optional `match_mode` with default `any`. Existing calls still
-use the original full-text predicate and normalization. The input schema still
-requires only `dataset` and `query`.
+use the original full-text predicate and normalization. The input schema requires
+only `dataset`; omitting `query` is subject to the structured-filter rules below.
 
 | Mode | Meaning | Parameterized predicate / relation |
 | --- | --- | --- |
@@ -42,6 +42,41 @@ added at the top level and in `provenance.applied_filters`. The legacy
 `full_text_query` provenance field also holds the literal message in exact mode.
 Executed records/count SQL, their bound parameters, returned count, and
 `truncated` remain available.
+
+## BGL filter-only search
+
+For BGL, omit `query` or supply null to retrieve records regardless of message
+text. Require both `start_time` and `end_time`, with start strictly before end,
+and at least one nonempty `component` or `severity` filter. Both filters can be
+combined. Time-only, component-only, severity-only and open-ended filter-only
+requests are rejected. This applies to both SQL and sample BGL backends.
+
+The public parameter is **`severity`**, mapped to the SQL `level` column; there
+is no `level` parameter. For example, drill into the MMCS spike using:
+
+```json
+{"dataset":"bgl","component":"MMCS","severity":"ERROR","start_time":"2005-09-20T12:00:00","end_time":"2005-09-20T13:00:00","limit":50}
+```
+
+Bounds remain timezone-naive, start inclusive/end exclusive. Filter-only SQL
+uses the base table with bound equality/time predicates and no message predicate
+or inverted-index lookup. Counts cover all matches; only returned evidence is
+limited (default 20, maximum 50), ordered by timestamp then stable record ID.
+`provenance.applied_filters.full_text_query` is null. `match_mode` retains its
+validated value but has no effect without text. Empty messages remain eligible.
+
+A supplied text query retains all four matching modes and existing validation:
+blank token queries are rejected, while an explicit empty exact query searches
+only empty messages. OpenStack still permits omitted text with a literal
+`request_id` or `instance_id`. No schema fields or successful response fields
+change. MCP query sessions retain their configured SQL execution deadlines.
+
+Pass a spike finding's component and time bounds directly; a contributor's
+`severity` selects that severity only. Omitting severity returns all levels for
+the component/window, which may exceed the detector's selected-record count.
+Likewise, a single-severity query does not represent a multi-severity spike's
+entire selected population. Returned `record_id` values support
+`get_nearby_events` with `dataset="bgl"`.
 
 The real filter tests uncovered two pre-existing SereneDB 26.09 issues: binary
 datetime parameters caused `Invalid unicode`, and index timestamp predicates
