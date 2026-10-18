@@ -221,6 +221,10 @@ also support `week` and `month`; optional `sort_direction='desc'` shows newest
 periods first. Totals remain independent of the returned-group limit. See
 [the tool schema, live examples, verification, benchmarks and Windows MCP-only update instructions](docs/pattern_aggregation.md).
 
+For OpenStack request/instance tracing, field coverage, tested SELECT examples
+and the slow-boot demo scenario, see
+[OpenStack incident tracing](docs/openstack_incident_tracing.md).
+
 After the database is ready, run the real read-only HTTP verifier:
 
 ```bash
