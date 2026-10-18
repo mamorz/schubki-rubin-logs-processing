@@ -1,0 +1,9 @@
+{
+ "tool": "analyze_vm_spawn_performance",
+ "arguments": {
+  "start_time": "2017-05-17T00:00:00",
+  "end_time": "2017-05-14T00:00:00"
+ },
+ "is_error": true,
+ "text": "Error executing tool analyze_vm_spawn_performance: start_time must be earlier than end_time"
+}
