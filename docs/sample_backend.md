@@ -49,10 +49,9 @@ cp .env.example .env
 ```
 
 Fill `SERENEDB_DSN` in `.env` after the organizers provide the connection string.
-Also set `MCP_DATASET_BACKEND=sample`. Set `SERENEDB_DOCKER_DSN` to the equivalent container-to-host connection string.
-On macOS this normally uses `host.docker.internal` instead of `127.0.0.1`.
-Docker Compose reads `.env` automatically. For a direct Python run, export the
-variables from that file in your shell before running:
+Also set `MCP_DATASET_BACKEND=sample`. The direct Python entrypoint reads this
+repository's `.env`; the jury Compose wrapper ignores it and always uses the
+full SQL backend. For the sample server, run:
 
 ```bash
 python server.py
@@ -266,24 +265,19 @@ With `MCP_DATASET_BACKEND=sample`, the MCP server uses the 2,000-row sample tabl
 `*_full_v1` production table requires a separate explicit review step; it is not
 performed by these commands.
 
-## Docker
+## Local sample server
 
-Build and run only after creating `.env` and filling `SERENEDB_DOCKER_DSN` with
-the supplied connection string adjusted for container networking:
+The jury Compose stack is fixed to the full SQL backend and its own SereneDB.
+For this optional sample workflow, use direct Python with an explicitly selected
+sample database; do not load sample/staging tables into the jury database.
 
 ```bash
-docker compose up --build -d --no-deps mcp-server
-docker compose ps
-curl --fail http://127.0.0.1:18000/healthz
-python -m scripts.verify_mcp_http
+MCP_DATASET_BACKEND=sample MCP_TRANSPORT=streamable-http MCP_PORT=18000 python server.py
 ```
 
-The Streamable HTTP MCP endpoint is `http://127.0.0.1:18000/mcp`. Compose publishes
-only to host loopback by default, while the process listens on container port 8000.
-`MCP_PUBLISHED_PORT` can change the host port. The container runs as a non-root
-user with a read-only filesystem, reports health through `/healthz`, and restarts
-unless explicitly stopped. Docker installs the exact tested dependency set from
-`requirements.lock`.
+Configure `SERENEDB_DSN` for that sample database beforehand. Stop any other MCP
+process using port 18000 first. Docker instructions for the full SQL corpus are
+in [README](../README.md).
 
 For Kiro on the same computer, use the safe example in
 [`examples/kiro/mcp.local.example.json`](../examples/kiro/mcp.local.example.json).

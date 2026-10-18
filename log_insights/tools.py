@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Mapping
+from typing import Any, Literal, Mapping
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
@@ -57,11 +57,22 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         component: str | None = None,
         severity: str | None = None,
         limit: int = DEFAULT_SEARCH_LIMIT,
+        match_mode: Literal["any", "phrase", "exact", "all"] = "any",
     ) -> dict[str, Any]:
-        """Search BGL or OpenStack messages using optional exact filters.
+        """Search BGL or OpenStack messages with optional filters and match_mode.
+
+        any (default): existing OR-based full-text search, matching any query token.
+        phrase: consecutive tokens in order anywhere in the message, using the
+        index dictionary's normalization (case/punctuation/spacing may differ).
+        exact: equality with the ENTIRE stored raw message, preserving case,
+        punctuation, and all whitespace; not a substring or token phrase. Copy a
+        returned message verbatim for exact lookup; empty messages are allowed.
+        all: every query token must occur, in any order, without adjacency.
 
         Timestamps must be ISO 8601 values without timezone information. Start is
         inclusive and end is exclusive. Results default to 20 and are capped at 50.
+        total_corpus_match_count covers all filtered matches, independently of
+        limit. Returns match_mode, executed SQL, bound parameters and truncation.
         """
 
         try:
@@ -73,6 +84,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
                 component=component,
                 severity=severity,
                 limit=limit,
+                match_mode=match_mode,
             )
         except ValueError as error:
             raise ToolError(str(error)) from error
@@ -161,6 +173,7 @@ def _parse_timestamp(field: str, value: str | None) -> datetime | None:
 
 def _serialize_query_result(result: QueryResult) -> dict[str, Any]:
     return {
+        "match_mode": result.match_mode,
         "records": [_json_mapping(row) for row in result.rows],
         "returned_record_count": result.returned_record_count,
         "total_corpus_match_count": result.total_corpus_match_count,

@@ -40,8 +40,8 @@ def test_builds_allowlisted_parameterized_bgl_query() -> None:
     assert plan.dataset == "bgl"
     assert f"FROM {BGL_SEARCH_INDEX}" in plan.sql
     assert "message @@ %(text)s" in plan.sql
-    assert "event_time >= %(start_time)s" in plan.sql
-    assert "event_time < %(end_time)s" in plan.sql
+    assert "event_time >= %(start_time)t" in plan.sql
+    assert "event_time < %(end_time)t" in plan.sql
     assert "component = %(component)s" in plan.sql
     assert "severity = %(severity)s" in plan.sql
     assert malicious_text not in plan.sql

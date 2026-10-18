@@ -1,13 +1,6 @@
 -- Schema for the base corpus: BGL + OpenStack logs and the team-ownership table.
--- DESTRUCTIVE: drops and recreates the objects below. Operator approval required.
-
-DROP INDEX IF EXISTS bgl_logs_idx;
-DROP INDEX IF EXISTS openstack_logs_idx;
-DROP TABLE IF EXISTS bgl_logs;
-DROP TABLE IF EXISTS openstack_logs;
-DROP TABLE IF EXISTS openstack_anomalous_instances;
-DROP TABLE IF EXISTS ownership;
-DROP TEXT SEARCH DICTIONARY IF EXISTS log_dict;
+-- Create-only: jury_setup checks that the application database is empty first.
+-- Deliberately no IF NOT EXISTS: concurrent/partial setup must fail before loads.
 
 -- Log messages are mostly ASCII words, hex values and IDs. Lower-case, no
 -- stemming, so "error" and "errors" stay distinct. position enables phrase

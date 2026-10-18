@@ -6,42 +6,23 @@ by default. Never expose the container port directly to the public internet.
 
 ## Start the server
 
-Follow the [README](../README.md) to select a new isolated stack or an approved
-existing database. The Compose default connects MCP to its own `serenedb` service;
-it does not initialize tables or load data. Set `SERENEDB_DOCKER_DSN` only when
-deliberately using another approved database. A host-local database on macOS uses
-`host.docker.internal` from the container. No credentials need to reach Kiro.
-
-After the selected database has been provisioned and validated:
+Follow the [jury setup in README](../README.md). The guarded setup initializes
+only an empty application database and reuses a complete corpus on later runs.
+Compose connects MCP only to its own `serenedb` service; external DSNs are ignored.
+No credentials need to reach Kiro, and Tailscale is not required locally.
 
 ```bash
-docker compose up --build -d
-docker compose ps
-docker compose logs --tail=100 mcp-server
+./scripts/jury-up.sh
+./scripts/jury-compose.sh ps
+./scripts/jury-compose.sh logs --tail=100 mcp-server
 curl --fail http://127.0.0.1:18000/healthz
-.venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp
+./scripts/jury-compose.sh exec -T mcp-server python -m scripts.verify_mcp_http --url http://127.0.0.1:8000/mcp
 ```
 
-For an external database, use `docker compose up --build -d --no-deps mcp-server`
-instead of starting the whole stack.
-
-The default publication is exactly `127.0.0.1:18000:8000`. Override the host-side
-port with `MCP_PUBLISHED_PORT`; the host binding remains fixed to loopback.
-`/healthz` checks
-only process and HTTP readiness. The MCP `health_check` tool behaves similarly;
-the HTTP verification command also runs read-only log queries and therefore
-verifies the SereneDB connection.
-
-Compose uses `restart: unless-stopped`, an HTTP health check, a read-only root
-filesystem, a temporary `/tmp`, a non-root image user, and `no-new-privileges`.
-Inspect health with:
-
-```bash
-docker inspect --format '{{.State.Health.Status}}' \
-  schubki-integration-mcp-server-1
-```
-
-Adjust the container prefix if you changed `COMPOSE_PROJECT_NAME`.
+Every Compose operation uses the explicit `schubki-jury` project through the
+wrapper. The publication is `127.0.0.1:18000:8000`. `/healthz` and `health_check`
+check process readiness; HTTP verification also runs read-only database queries.
+The server uses a read-only filesystem, a non-root user, and an HTTP health check.
 
 ## Kiro configuration on the same computer
 

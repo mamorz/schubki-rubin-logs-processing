@@ -40,7 +40,7 @@ class Cursor:
         self.raw.close()
 
     def execute(self, sql, parameters=None):
-        sql = re.sub(r"%\((\w+)\)s", r":\1", sql)
+        sql = re.sub(r"%\((\w+)\)[st]", r":\1", sql)
         sql = sql.replace("message @@ :text", "message LIKE '%' || :text || '%'")
         sql = sql.replace("message @@ %s", "message LIKE '%' || ? || '%'")
         if isinstance(parameters, dict):
@@ -115,7 +115,7 @@ def test_native_search_columns_filters_and_parameterization():
         start_time=datetime(2017, 5, 16), _dataset_specs=SQL_DATASET_SPECS,
     )
     assert "FROM openstack_logs_idx" in plan.sql
-    assert "ts >= %(start_time)s" in plan.sql
+    assert "ts >= %(start_time)t" in plan.sql
     assert "level = %(severity)s" in plan.sql
     assert "CAST(NULL AS VARCHAR) AS event_id" in plan.sql
     assert "instance' OR" not in plan.sql
@@ -252,3 +252,21 @@ def test_real_http_with_sql_adapter_and_ephemeral_fixture(monkeypatch, sql_fixtu
             server.should_exit = True
             thread.join(timeout=10)
             assert not thread.is_alive()
+
+
+@pytest.mark.parametrize("dataset", ["bgl", "openstack"])
+@pytest.mark.parametrize("text", ["", " ", "  Core.'%_\t  ", "x' OR 1=1 --"])
+def test_exact_search_uses_literal_raw_equality(sql_fixture, dataset, text):
+    db, factory = sql_fixture
+    # Disposable in-memory fixture only; special characters are not query syntax.
+    db.execute(f"UPDATE {dataset}_logs SET message = ?", (text,))
+    service = QueryService(factory, SQL_DATASET_SPECS)
+    exact = service.search_logs(dataset=dataset, text=text, match_mode="exact", limit=1)
+    total = 2 if dataset == "bgl" else 3
+    assert exact.total_corpus_match_count == total
+    assert exact.returned_record_count == 1 and exact.truncated
+    assert exact.rows[0]["message"] == text
+    for altered in (text + " ", text + "%"):
+        missing = service.search_logs(dataset=dataset, text=altered, match_mode="exact")
+        assert missing.total_corpus_match_count == 0
+        assert missing.rows == [] and not missing.truncated

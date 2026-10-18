@@ -28,6 +28,14 @@ MAX_SUMMARY_LIMIT = 100
 DEFAULT_NEARBY_EVENTS = 10
 MAX_NEARBY_EVENTS = 50
 
+# Code-owned SQL only: the query text always remains a bound parameter.
+SEARCH_PREDICATES: Mapping[str, str] = {
+    "any": "message @@ %(text)s",
+    "phrase": "message @@ ts_phrase(%(text)s)",
+    "exact": "message = %(text)s",
+    "all": "message @@ plainto_tsquery(%(text)s)",
+}
+
 
 @dataclass(frozen=True)
 class DatasetSpec:
@@ -127,6 +135,7 @@ class SearchQueryPlan:
     count_parameters: Mapping[str, Any]
     applied_filters: Mapping[str, Any]
     limit: int
+    match_mode: str = "any"
 
 
 @dataclass(frozen=True)
@@ -143,6 +152,7 @@ class QueryResult:
     returned_record_count: int
     total_corpus_match_count: int
     truncated: bool
+    match_mode: str = "any"
 
 
 @dataclass(frozen=True)
@@ -238,6 +248,7 @@ def build_search_query_plan(
     component: str | None = None,
     severity: str | None = None,
     limit: int = DEFAULT_SEARCH_LIMIT,
+    match_mode: str = "any",
     _dataset_specs: Mapping[str, DatasetSpec] = DATASET_SPECS,
 ) -> SearchQueryPlan:
     """Validate a request and build SQL using only fixed relation names.
@@ -247,17 +258,31 @@ def build_search_query_plan(
     """
 
     normalized_dataset = _normalize_dataset(dataset, _dataset_specs)
-    normalized_text = _required_text(text, "text")
+    normalized_mode = _normalize_match_mode(match_mode)
+    normalized_text = _search_text(text, normalized_mode)
     normalized_component = _optional_text(component, "component")
     normalized_severity = _optional_text(severity, "severity")
     _validate_timestamp_range(start_time, end_time)
     _validate_limit(limit, MAX_SEARCH_LIMIT)
 
     spec = _dataset_specs[normalized_dataset]
-    predicates = ["message @@ %(text)s"]
+    predicates = [SEARCH_PREDICATES[normalized_mode]]
+    # An analyzed index is for token matching. Raw equality must compare the
+    # complete stored message, including case, punctuation and whitespace.
+    relation = spec.table if normalized_mode == "exact" else spec.index_relation
+    if normalized_mode != "exact" and (start_time is not None or end_time is not None):
+        # SereneDB 26.09's indexed timestamp range can include out-of-range rows.
+        # Keep full-text matching in the index but apply time/filter predicates
+        # to base-table candidates. Use this same plan for records AND counts.
+        relation = spec.table
+        predicates = [
+            f"{spec.id_expression} IN (SELECT {spec.id_expression} "
+            f"FROM {spec.index_relation} WHERE {predicates[0]})"
+        ]
     count_parameters: dict[str, Any] = {"text": normalized_text}
     applied_filters: dict[str, Any] = {
         "full_text_query": normalized_text,
+        "match_mode": normalized_mode,
         "start_time": start_time,
         "end_time": end_time,
         "component": normalized_component,
@@ -267,10 +292,12 @@ def build_search_query_plan(
     }
 
     if start_time is not None:
-        predicates.append(f"{spec.time_column} >= %(start_time)s")
+        # 26.09's inverted-index path rejects psycopg binary datetime values.
+        # %t binds the same typed value in text wire format; never interpolate it.
+        predicates.append(f"{spec.time_column} >= %(start_time)t")
         count_parameters["start_time"] = start_time
     if end_time is not None:
-        predicates.append(f"{spec.time_column} < %(end_time)s")
+        predicates.append(f"{spec.time_column} < %(end_time)t")
         count_parameters["end_time"] = end_time
     if normalized_component is not None:
         predicates.append("component = %(component)s")
@@ -282,12 +309,12 @@ def build_search_query_plan(
     where_clause = " AND\n    ".join(predicates)
     sql = f"""SELECT
     {spec.record_columns}
-FROM {spec.index_relation}
+FROM {relation}
 WHERE {where_clause}
 ORDER BY {spec.time_column}, {spec.id_expression}
 LIMIT %(fetch_limit)s"""
     count_sql = f"""SELECT COUNT(*) AS total_corpus_match_count
-FROM {spec.index_relation}
+FROM {relation}
 WHERE {where_clause}"""
 
     parameters = dict(count_parameters)
@@ -300,6 +327,7 @@ WHERE {where_clause}"""
         count_parameters=count_parameters,
         applied_filters=applied_filters,
         limit=limit,
+        match_mode=normalized_mode,
     )
 
 
@@ -523,8 +551,9 @@ class QueryService:
         component: str | None = None,
         severity: str | None = None,
         limit: int = DEFAULT_SEARCH_LIMIT,
+        match_mode: str = "any",
     ) -> QueryResult:
-        """Retrieve bounded full-text matches and the complete filtered count."""
+        """Retrieve bounded message matches and the complete filtered count."""
 
         plan = build_search_query_plan(
             dataset=dataset,
@@ -534,6 +563,7 @@ class QueryService:
             component=component,
             severity=severity,
             limit=limit,
+            match_mode=match_mode,
             _dataset_specs=self._dataset_specs,
         )
 
@@ -545,7 +575,7 @@ class QueryService:
                 count_row = cursor.fetchone()
 
         if count_row is None:
-            raise RuntimeError("SereneDB did not return a full-text match count")
+            raise RuntimeError("SereneDB did not return a message match count")
 
         truncated = len(fetched_rows) > plan.limit
         rows = fetched_rows[: plan.limit]
@@ -560,6 +590,7 @@ class QueryService:
             returned_record_count=len(rows),
             total_corpus_match_count=int(count_row["total_corpus_match_count"]),
             truncated=truncated,
+            match_mode=plan.match_mode,
         )
 
     def get_nearby_events(
@@ -775,6 +806,26 @@ def _normalize_interval(interval: str | None) -> str | None:
         supported = ", ".join(TIME_INTERVALS)
         raise ValueError(f"interval must be one of: {supported}")
     return TIME_INTERVALS[normalized]
+
+
+def _normalize_match_mode(match_mode: str) -> str:
+    if not isinstance(match_mode, str):
+        raise ValueError("match_mode must be a string")
+    normalized = match_mode.strip().lower()
+    if normalized not in SEARCH_PREDICATES:
+        raise ValueError(f"match_mode must be one of: {', '.join(SEARCH_PREDICATES)}")
+    return normalized
+
+
+def _search_text(text: str, match_mode: str) -> str:
+    if match_mode != "exact":
+        return _required_text(text, "text")
+    if not isinstance(text, str):
+        raise ValueError("text must be a string")
+    if "\x00" in text:
+        raise ValueError("text must not contain NUL characters")
+    # Empty/whitespace messages are valid raw values. Never strip exact input.
+    return text
 
 
 def _required_text(value: str, field: str) -> str:
