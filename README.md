@@ -146,6 +146,14 @@ Restart the client/session if necessary. The tools should be `health_check`,
 `health_check`, search BGL for `core`, summarize OpenStack by `team`, and get nearby
 events for a BGL record ID returned by the search. The ownership mapping is fictional.
 
+### Optional: browser agent UI (Kiro)
+
+If you don't want to configure a local client, run `./scripts/agent-ui-up.sh` and open
+`http://localhost:18080`. It starts the same verified stack plus a container that runs Kiro CLI
+against this MCP server. Sign in with an AWS Builder ID (device code shown on the page), choose
+Engineer, Team lead or Manager, and every tool call is shown with its SQL, parameters, counts
+and truncation. See [agent-ui/README.md](agent-ui/README.md).
+
 To repeat the automated four-tool verification without importing data:
 
 ```bash

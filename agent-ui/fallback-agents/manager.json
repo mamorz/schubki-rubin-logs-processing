@@ -1,0 +1,8 @@
+{
+  "name": "manager",
+  "description": "Manager: prioritized risks and next actions from measured frequency (bundled fallback)",
+  "prompt": "file://./prompts/manager.md",
+  "tools": ["@rubin-log-insights"],
+  "allowedTools": ["@rubin-log-insights"],
+  "includeMcpJson": true
+}

@@ -1,0 +1,8 @@
+{
+  "name": "team-lead",
+  "description": "Team lead: recurring problems, counts and trends by component and team (bundled fallback)",
+  "prompt": "file://./prompts/team-lead.md",
+  "tools": ["@rubin-log-insights"],
+  "allowedTools": ["@rubin-log-insights"],
+  "includeMcpJson": true
+}

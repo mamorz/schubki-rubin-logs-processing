@@ -1,0 +1,8 @@
+{
+  "name": "engineer",
+  "description": "Engineer: investigates a specific failure with full-text evidence and nearby events (bundled fallback)",
+  "prompt": "file://./prompts/engineer.md",
+  "tools": ["@rubin-log-insights"],
+  "allowedTools": ["@rubin-log-insights"],
+  "includeMcpJson": true
+}
