@@ -11,6 +11,7 @@ import anyio
 from mcp import Client
 
 EXPECTED_TOOLS = {
+    "detect_log_spikes",
     "analyze_vm_spawn_performance",
     "get_nearby_events",
     "health_check",
@@ -18,6 +19,7 @@ EXPECTED_TOOLS = {
     "summarize_logs",
 }
 REQUIRED_INPUTS = {
+    "detect_log_spikes": set(),
     "analyze_vm_spawn_performance": set(),
     "get_nearby_events": {"dataset", "record_id"},
     "health_check": set(),
@@ -183,8 +185,52 @@ async def verify_vm_spawn_performance(client: Client) -> dict[str, Any]:
                 effective_threshold_seconds=small["detection"]["effective_threshold_seconds"])
 
 
+async def verify_log_spikes(client: Client) -> dict[str, Any]:
+    """Verify measured full-corpus spikes and independent contributor counts."""
+    name = "detect_log_spikes"
+    tool = next(t for t in (await client.list_tools()).tools if t.name == name)
+    assert not tool.input_schema.get("required")
+    assert tool.input_schema["properties"]["baseline_quantile"]["default"] == .99
+
+    async def detect(**args):
+        result = await client.call_tool(name, args)
+        assert not result.is_error
+        data = result.structured_content
+        assert data["provenance"]["statement_count"] == 1
+        assert not data["method"]["labels_used_for_detection"]
+        return data
+
+    full = await detect(max_findings=20, patterns_per_finding=5)
+    small = await detect(max_findings=1, patterns_per_finding=1, evidence_per_pattern=3)
+    assert full["counts"]["corpus_record_count"] == 4747963
+    assert full["counts"]["elevated_component_bucket_count"] == 24
+    assert full["counts"]["spike_window_count"] == 16
+    for key in ("baselines", "coverage", "method"):
+        assert full[key] == small[key]
+    assert {k:v for k,v in full["counts"].items() if k != "returned_spike_window_count"} == {
+        k:v for k,v in small["counts"].items() if k != "returned_spike_window_count"}
+    assert not full["truncation"]["findings_truncated"]
+    assert small["truncation"]["findings_truncated"]
+    for finding in full["findings"] + small["findings"]:
+        assert sum(p["record_count"] for p in finding["contributors"]) + finding["omitted_pattern_record_count"] == finding["selected_record_count"]
+        for pattern in finding["contributors"]:
+            assert pattern["evidence"] and pattern["evidence"][0]["record_id"] > 0
+    mmcs = next(f for f in full["findings"] if f["component"] == "MMCS" and f["start_time"] == "2005-09-20T12:00:00")
+    assert mmcs["selected_record_count"] == 66563
+    assert [p["record_count"] for p in mmcs["contributors"]] == [63468, 3095]
+    assert mmcs["omitted_pattern_record_count"] == 0
+    daily = await detect(interval="day")
+    assert daily["counts"]["spike_window_count"] == 2
+    empty = await detect(component="NO_SUCH_COMPONENT")
+    assert not empty["findings"]
+    invalid = await client.call_tool(name, {"severities": ["CRITICAL"]})
+    assert invalid.is_error
+    return dict(corpus_record_count=4747963, elevated_component_bucket_count=24, spike_window_count=16,
+                mmcs_selected_record_count=66563, mmcs_contributor_counts=[63468,3095])
+
+
 async def verify_endpoint(url: str, *, mode: str = "auto", patterns: bool = False, tracing: bool = False,
-                          performance: bool = False) -> dict[str, Any]:
+                          performance: bool = False, spikes: bool = False) -> dict[str, Any]:
     """Verify initialization, schemas, read-only tools, and error handling."""
 
     async with Client(url, read_timeout_seconds=30, mode=mode) as client:
@@ -330,6 +376,8 @@ async def verify_endpoint(url: str, *, mode: str = "auto", patterns: bool = Fals
             report["openstack_tracing"] = await verify_openstack_tracing(client)
         if performance:
             report["vm_spawn_performance"] = await verify_vm_spawn_performance(client)
+        if spikes:
+            report["log_spikes"] = await verify_log_spikes(client)
         return report
 
 
@@ -344,13 +392,15 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--patterns", action="store_true", help="Also verify pattern aggregation on the full SQL corpora")
     parser.add_argument("--tracing", action="store_true", help="Also verify OpenStack structured tracing on the full SQL corpus")
     parser.add_argument("--performance", action="store_true", help="Also verify exact OpenStack spawn baselines and slow-event detection")
+    parser.add_argument("--spikes", action="store_true", help="Also verify complete BGL spike windows and contributing messages")
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     async def run():
-        return await verify_endpoint(args.url, patterns=args.patterns, tracing=args.tracing, performance=args.performance)
+        return await verify_endpoint(args.url, patterns=args.patterns, tracing=args.tracing,
+                                     performance=args.performance, spikes=args.spikes)
     print(json.dumps(anyio.run(run), indent=2, default=str))
 
 

@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Literal, Mapping
+from functools import wraps
+import logging
+from typing import Any, Callable, Literal, Mapping, ParamSpec, TypeVar
 
+import psycopg
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import StrictBool, StrictFloat, StrictInt
@@ -19,6 +22,40 @@ from .queries import (
     QueryResult,
     QueryService,
 )
+
+logger = logging.getLogger(__name__)
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def _database_errors(function: Callable[_P, _R]) -> Callable[_P, _R]:
+    """Expose safe expected failures while retaining diagnostics in server logs."""
+
+    @wraps(function)
+    def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        try:
+            return function(*args, **kwargs)
+        except psycopg.Error as error:
+            if isinstance(error, psycopg.errors.QueryCanceled):
+                message = "SQL execution timed out or was cancelled. Narrow the filters or time range and retry."
+                category = "timeout"
+            elif isinstance(error, psycopg.InterfaceError) or (
+                isinstance(error, psycopg.OperationalError) and (
+                    error.sqlstate is None
+                    or error.sqlstate.startswith(("08", "28"))
+                    or error.sqlstate in {"57P01", "57P02", "57P03", "53300"}
+                )
+            ):
+                message = "Database connection unavailable. Check that SereneDB is running and reachable, then retry."
+                category = "connection"
+            else:
+                message = "Database query failed. Retry; if it persists, ask the operator to check the server logs."
+                category = "execution"
+            logger.warning("Database failure in %s (%s, SQLSTATE=%s)",
+                           function.__name__, category, error.sqlstate, exc_info=True)
+            raise ToolError(message) from error
+
+    return wrapped
 
 
 @dataclass(frozen=True)
@@ -34,6 +71,7 @@ PLANNED_TOOLS: tuple[PlannedTool, ...] = (
     PlannedTool("get_nearby_events", "Retrieve events around a selected log entry."),
     PlannedTool("summarize_logs", "Calculate complete-scope counts and time trends."),
     PlannedTool("analyze_vm_spawn_performance", "Measure the complete OpenStack spawn-duration population and discover slow events."),
+    PlannedTool("detect_log_spikes", "Screen complete BGL component bucket populations for elevated log volumes."),
 )
 
 
@@ -41,6 +79,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
     """Register health, search, aggregation, and chronological-context tools."""
 
     @server.tool()
+    @_database_errors
     def health_check() -> dict[str, str]:
         """Confirm that the MCP server is running without querying SereneDB."""
 
@@ -51,6 +90,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         }
 
     @server.tool()
+    @_database_errors
     def search_logs(
         dataset: str,
         query: str | None = None,
@@ -111,6 +151,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         return _serialize_query_result(result)
 
     @server.tool()
+    @_database_errors
     def summarize_logs(
         dataset: str,
         group_by: str,
@@ -164,6 +205,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         return _serialize_aggregation_result(result)
 
     @server.tool()
+    @_database_errors
     def analyze_vm_spawn_performance(
         dataset: Literal["openstack"] = "openstack",
         start_time: str | None = None, end_time: str | None = None,
@@ -209,6 +251,62 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
             raise ToolError(str(error)) from error
 
     @server.tool()
+    @_database_errors
+    def detect_log_spikes(
+        dataset: Literal["bgl"] = "bgl",
+        start_time: str | None = None, end_time: str | None = None,
+        component: str | None = None, interval: Literal["hour", "day"] = "hour",
+        signal: Literal["severity_volume", "total_volume"] = "severity_volume",
+        severities: list[str] | None = None,
+        baseline_scope: Literal["corpus", "reference"] = "corpus",
+        baseline_start_time: str | None = None, baseline_end_time: str | None = None,
+        baseline_quantile: StrictFloat = 0.99, threshold_multiplier: StrictFloat = 1.5,
+        min_bucket_count: StrictInt = 20, min_baseline_buckets: StrictInt = 100,
+        max_findings: StrictInt = 10, patterns_per_finding: StrictInt = 3, evidence_per_pattern: StrictInt = 1,
+    ) -> dict[str, Any]:
+        """Discover BGL log-volume spikes without specifying suspicious windows.
+
+        SQL-backed BGL only. Default severity_volume includes WARNING, ERROR,
+        SEVERE, FAILURE and FATAL; severities optionally selects BGL levels.
+        total_volume includes every level and rejects severities. Each component
+        baseline uses whole component-active hour/day buckets; INFO-only buckets
+        are valid zero adverse observations. Missing periods are never zero-filled.
+
+        Elevated means selected count >= min_bucket_count AND strictly greater
+        than the baseline's empirical quantile count * threshold_multiplier
+        (default P99 * 1.5), with >=100 baseline buckets by default.
+        This is a screening heuristic, not a calibrated anomaly probability.
+        Labels never affect detection. Insufficient history remains explicit.
+
+        corpus baselines are retrospective and include the analysis. reference
+        requires explicit disjoint analysis and baseline ranges. Timestamps are
+        naive ISO 8601, start inclusive/end exclusive. Partial boundary buckets
+        and globally mixed rounded source-clock offsets are excluded. Contiguous
+        elevated buckets merge only within the same component and never across
+        missing, excluded or non-elevated buckets. Boundaries are log windows,
+        not incident onset/resolution. Spikes do not prove outages or root causes.
+
+        Complete counts precede limits. max_findings is 1..20; patterns_per_finding
+        1..5; evidence_per_pattern 1..3. Exact message/severity contributors carry
+        full counts, percentages, omitted-message remainders and original record
+        references. Long messages are explicitly truncated at 1000 characters.
+        Returns SQL, bound parameters, coverage diagnostics and truncation flags.
+        """
+        try:
+            return queries.detect_log_spikes(dataset=dataset,
+                start_time=_parse_timestamp("start_time", start_time), end_time=_parse_timestamp("end_time", end_time),
+                component=component, interval=interval, signal=signal, severities=severities,
+                baseline_scope=baseline_scope,
+                baseline_start_time=_parse_timestamp("baseline_start_time", baseline_start_time),
+                baseline_end_time=_parse_timestamp("baseline_end_time", baseline_end_time),
+                baseline_quantile=baseline_quantile, threshold_multiplier=threshold_multiplier,
+                min_bucket_count=min_bucket_count, min_baseline_buckets=min_baseline_buckets,
+                max_findings=max_findings, patterns_per_finding=patterns_per_finding, evidence_per_pattern=evidence_per_pattern)
+        except ValueError as error:
+            raise ToolError(str(error)) from error
+
+    @server.tool()
+    @_database_errors
     def get_nearby_events(
         dataset: str,
         record_id: int,

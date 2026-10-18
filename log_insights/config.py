@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import os
 from typing import Literal, cast
 
@@ -20,6 +21,14 @@ class Settings:
     mcp_port: int = 8000
     mcp_path: str = "/mcp"
     dataset_backend: str = "sql"
+    sql_timeout_seconds: float = 15.0
+
+    def __post_init__(self) -> None:
+        if (isinstance(self.sql_timeout_seconds, bool)
+                or not isinstance(self.sql_timeout_seconds, (int, float))
+                or not math.isfinite(self.sql_timeout_seconds)
+                or not 0.001 <= self.sql_timeout_seconds <= 3600):
+            raise ValueError("MCP_SQL_TIMEOUT_SECONDS must be a finite number between 0.001 and 3600")
 
     @classmethod
     def from_env(cls) -> "Settings":
@@ -39,6 +48,11 @@ class Settings:
         if not path.startswith("/"):
             raise ValueError("MCP_PATH must start with '/'")
 
+        try:
+            sql_timeout = float(os.getenv("MCP_SQL_TIMEOUT_SECONDS", "15"))
+        except ValueError as error:
+            raise ValueError("MCP_SQL_TIMEOUT_SECONDS must be a finite number between 0.001 and 3600") from error
+
         return cls(
             serenedb_dsn=os.getenv("SERENEDB_DSN") or None,
             mcp_transport=cast(McpTransport, transport),
@@ -46,6 +60,7 @@ class Settings:
             mcp_port=port,
             mcp_path=path,
             dataset_backend=backend,
+            sql_timeout_seconds=sql_timeout,
         )
 
     def require_serenedb_dsn(self) -> str:

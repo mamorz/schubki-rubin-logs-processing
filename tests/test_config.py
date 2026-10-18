@@ -27,6 +27,26 @@ def test_http_transport_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
     assert settings.mcp_path == "/logs-mcp"
 
 
+def test_sql_timeout_default_and_override(monkeypatch):
+    monkeypatch.delenv("MCP_SQL_TIMEOUT_SECONDS", raising=False)
+    assert Settings.from_env().sql_timeout_seconds == 15
+    monkeypatch.setenv("MCP_SQL_TIMEOUT_SECONDS", "0.125")
+    assert Settings.from_env().sql_timeout_seconds == .125
+
+
+@pytest.mark.parametrize("value", ["", "bad", "0", "-1", "nan", "inf", "0.0001", "3601"])
+def test_invalid_sql_timeout_fails_configuration(monkeypatch, value):
+    monkeypatch.setenv("MCP_SQL_TIMEOUT_SECONDS", value)
+    with pytest.raises(ValueError, match="MCP_SQL_TIMEOUT_SECONDS"):
+        Settings.from_env()
+
+
+@pytest.mark.parametrize("value", [True, None, "15", float("nan"), 0])
+def test_direct_settings_also_validate_timeout(value):
+    with pytest.raises(ValueError, match="MCP_SQL_TIMEOUT_SECONDS"):
+        Settings(None, sql_timeout_seconds=value)
+
+
 def test_entrypoint_loads_only_this_worktrees_env(monkeypatch):
     entrypoint = Path(__file__).resolve().parents[1] / "server.py"
     loaded_paths = []

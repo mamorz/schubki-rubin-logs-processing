@@ -31,6 +31,8 @@ def build_server(
             "is explicitly fictional and unmapped components remain visible. "
             "Use analyze_vm_spawn_performance to discover slow VM spawns and "
             "calculate exact fleet duration baselines without knowing a VM ID."
+            " Use detect_log_spikes to screen BGL components for elevated log "
+            "volumes with baseline comparisons and original-record evidence."
         ),
         version="1.0.0",
     )
