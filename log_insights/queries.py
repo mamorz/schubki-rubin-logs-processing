@@ -278,13 +278,21 @@ def build_search_query_plan(
             "request_id and instance_id filters require dataset='openstack' with "
             "the SQL backend (MCP_DATASET_BACKEND=sql); BGL and sample tables do not support them"
         )
-    if text is None and not has_identifiers:
+    if text is None and not has_identifiers and normalized_dataset != "bgl":
         raise ValueError("query is required unless request_id or instance_id is supplied for SQL-backed OpenStack")
     normalized_text = None if text is None else _search_text(text, normalized_mode)
     normalized_component = _optional_text(component, "component")
     normalized_severity = _optional_text(severity, "severity")
     _validate_timestamp_range(start_time, end_time)
     _validate_limit(limit, MAX_SEARCH_LIMIT)
+    if normalized_text is None and normalized_dataset == "bgl" and (
+        start_time is None or end_time is None
+        or (normalized_component is None and normalized_severity is None)
+    ):
+        raise ValueError(
+            "query is required unless BGL filter-only search includes both start_time "
+            "and end_time plus component or severity"
+        )
 
     predicates = [] if normalized_text is None else [SEARCH_PREDICATES[normalized_mode]]
     # An analyzed index is for token matching. Raw equality must compare the
