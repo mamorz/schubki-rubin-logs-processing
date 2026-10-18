@@ -19,7 +19,9 @@
   body {
     @apply bg-slate-50 text-slate-900 antialiased dark:bg-slate-950 dark:text-slate-100;
   }
-  ::selection { @apply bg-ruby-100 dark:bg-ruby-900; }
+  /* Explicit text colour too: otherwise light text on a light highlight disappears in dark mode. */
+  ::selection { background-color: #fecdd3; color: #4c0519; }
+  .dark ::selection { background-color: #be123c; color: #fff1f2; }
 }
 
 @utility panel { @apply rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900; }

@@ -3,11 +3,12 @@ import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, ty
 const THUMB = 22;
 
 /** Scroll area with a dark track and a draggable gem as the thumb (any icon can be passed as `thumb`). */
-export function GemScroll({ children, className = "", contentClassName = "", thumb = <RubyGem /> }: {
+export function GemScroll({ children, className = "", contentClassName = "", thumb = <RubyGem />, label = "Scroll conversation" }: {
   children: ReactNode;
   className?: string;
   contentClassName?: string;
   thumb?: ReactNode;
+  label?: string;
 }) {
   const id = useId();
   const viewport = useRef<HTMLDivElement>(null);
@@ -115,7 +116,7 @@ export function GemScroll({ children, className = "", contentClassName = "", thu
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={state.percent}
-          aria-label="Scroll conversation"
+          aria-label={label}
           tabIndex={0}
           onPointerDown={onThumbDown}
           onPointerMove={onThumbMove}

@@ -1,8 +1,9 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { ChevronRight, Download, ExternalLink, FileSearch, Folder, KeyRound, Loader2, LogOut, Trash2 } from "lucide-react";
+import { ChevronRight, Download, ExternalLink, FileSearch, FileText, Folder, KeyRound, Loader2, LogOut, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { ROLES, type RoleId, type StatusResponse, type ToolCallView } from "../../shared/events";
 import { api } from "../api";
+import { GemScroll, RubyGem } from "./GemScroll";
 import { describeResult } from "../../shared/toolResult";
 import { download, sessionToMarkdown } from "../exportMarkdown";
 import { useChat, type ConnectionState, type Turn } from "../store";
@@ -16,11 +17,10 @@ export function Header({ status, connection, onLogout }: {
   return (
     <header className="flex items-center gap-3 border-b border-slate-200 bg-white/80 px-4 py-2.5 backdrop-blur dark:border-slate-800 dark:bg-slate-900/80">
       <div className="flex items-center gap-2">
-        <span className="grid size-8 place-items-center rounded-lg bg-ruby-700 font-bold text-white">R</span>
-        <div className="leading-tight">
-          <div className="font-semibold">RUBIN Log Agent</div>
-          <div className="text-[11px] text-slate-500">BGL · OpenStack · SereneDB</div>
-        </div>
+        <span className="grid size-8 place-items-center rounded-lg bg-slate-950 ring-1 ring-white/10">
+          <RubyGem size={20} />
+        </span>
+        <span className="font-semibold">RUBIN Agent</span>
       </div>
       <div className="ml-auto flex items-center gap-2">
         <Health label="MCP" ok={status?.mcp.ok ?? null} title={status?.mcp.detail ?? status?.mcp.url} />
@@ -56,7 +56,7 @@ export function EvidenceLedger({ onClear }: { onClear: () => void }) {
   const current = turns[turns.length - 1];
   const previous = turns.slice(0, -1).filter((turn) => completedOf(turn).length > 0).reverse();
   return (
-    <aside className="flex min-h-0 flex-col gap-3">
+    <aside className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2">
         <FileSearch className="size-4 text-ruby-600" />
         <h2 className="text-sm font-semibold">Evidence ledger</h2>
@@ -81,7 +81,7 @@ export function EvidenceLedger({ onClear }: { onClear: () => void }) {
           Every database query the agent runs appears here with its filters, counts and truncation status. Export it to keep the evidence behind each answer.
         </p>
       )}
-      <div className="min-h-0 space-y-3 overflow-y-auto pr-1">
+      <GemScroll className="min-h-0 flex-1" contentClassName="space-y-3" thumb={<FileThumb />} label="Scroll evidence ledger">
         {current && completedOf(current).length > 0 && (
           <section>
             <h3 className="mb-1.5 truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500" title={current.question}>
@@ -96,9 +96,14 @@ export function EvidenceLedger({ onClear }: { onClear: () => void }) {
             {previous.map((turn) => <PreviousReport key={turn.id} turn={turn} calls={completedOf(turn)} />)}
           </section>
         )}
-      </div>
+      </GemScroll>
     </aside>
   );
+}
+
+/** Small ruby-coloured file used as the ledger's scroll handle. */
+function FileThumb() {
+  return <FileText className="size-[18px] text-ruby-500 drop-shadow-[0_0_5px_rgba(244,63,94,0.75)]" strokeWidth={2.25} />;
 }
 
 function roleLabel(role: RoleId): string {
