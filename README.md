@@ -1,345 +1,316 @@
 # RUBIN — Making Sense of Logs
 
-One SereneDB SQL infrastructure and one read-only MCP server for BGL and OpenStack.
-The integrated default uses the SQL teammate's `sql/` schema, indexes, loaders,
-and `data/ownership.csv`. No schema or data is created by MCP startup.
-No AI agent is included.
+RUBIN turns the BGL and OpenStack log corpora into evidence-backed answers for three roles:
 
-## Architecture and compatibility
+- the **Engineer** asks what failed and what happened just before and after;
+- the **Team lead** asks which problems recur, how often, and which teams are involved;
+- the **Manager** asks what deserves attention first.
 
-`server.py` → MCP tool handlers → parameterized `QueryService` → SereneDB.
-`MCP_DATASET_BACKEND=sql` is the default. Only the fixed tables/indexes below are
-queried; no compatibility tables, views, or second default schema are created.
+SereneDB does the searching and counting. A read-only **MCP server** exposes that as five tools,
+and three **Kiro role agents** decide which tools to call and explain the results. Each answer
+shows its evidence: tool calls, executed SQL, bound parameters, counts and truncation. A
+**browser UI** runs the agents for you, so the only thing a judge needs besides Docker is a free
+Kiro sign-in.
 
-| MCP field / feature | SQL infrastructure |
-| --- | --- |
-| BGL corpus / full-text search | `bgl_logs` / `bgl_logs_idx` |
-| OpenStack corpus / full-text search | `openstack_logs` / `openstack_logs_idx` |
-| timestamp / severity / component / message | `ts` (TIMESTAMP without zone) / `level` / `component` / `message` |
-| BGL `record_id` | `line_no` |
-| OpenStack `record_id` | source-file ordinal × 1,000,000,000 + `line_no` |
-| `event_id` | NULL: raw logs have no EventId or EventTemplate |
-| team grouping | LEFT JOIN `ownership` on dataset + component; missing keys → `UNMAPPED` |
+| Brief deliverable | Where |
+|---|---|
+| Setup, how to run it, workflow | [1. Setup from zero](#1-setup-from-zero) |
+| Tools with descriptions, inputs and outputs | [2. What we built](#2-what-we-built) |
+| One worked investigation with search and aggregation evidence | [3. Worked investigation](#3-worked-investigation) |
+| Architecture | [4. Architecture](#4-architecture) |
+| Known limitations | [5. Known limitations](#5-known-limitations) |
 
-OpenStack ordinals are 1 for `openstack_abnormal`, 2 for `openstack_normal1`, and
-3 for `openstack_normal2` (SQL source names have no `.log` suffix). IDs distinguish
-identical line numbers across files. Use IDs returned by `search_logs` for nearby
-lookups. `line_no` must be positive and below one billion, source identities must
-be unique, and ownership must have one row per dataset/component. The preflight
-below checks these assumptions. SQL loaders use `row_number() OVER ()` per file;
-retain SereneDB's default insertion-order preservation and stable input files.
+---
 
-Main's mapping has 22 fictional assignments (10 BGL, 12 OpenStack), recorded in
-provenance as `data/ownership.csv`, revision `main-a75f858` (the expected mapping
-source, not an attestation of current database contents). Ownership is not an
-authoritative organizational fact. MCP reports actual loaded counts, not an
-assumed full-corpus size. `development_sample=false` denotes the SQL backend, not
-proof that the entire corpus is loaded. Unavailable event IDs aggregate into a
-NULL group. Existing response shapes, filters, limits, SQL/parameter provenance,
-coverage, truncation, and chronological context are preserved.
+## 1. Setup from zero
 
-The Compose default follows main: **SereneDB 26.09.1.3**. The earlier MCP sample
-baseline was tested on 26.08.1; it does not certify main's DDL on that version.
-Dictionary syntax is version-sensitive: the connected documentation MCP's
-[dictionary reference](https://serenedb.com/docs/sql/statements/create_text_search_dictionary#examples)
-describes a newer form than `sql/01_schema.sql`. The
-[refresh reference](https://serenedb.com/docs/sql/statements/vacuum#refreshing--refresh_)
-confirms that indexed rows need refresh before reliable search visibility.
-The complete corpus, dictionary/index creation, and all four MCP tools were
-previously verified on SereneDB 26.09.1.3. Do not silently downgrade the database
-tag or alter an existing database to resolve version incompatibilities.
+> **Recommended for judges: use the RUBIN agent UI with Kiro** ([1.4](#14-connect-kiro--strongly-recommended-the-rubin-agent-ui)).
+> It is one command, needs no local AI client configuration, runs our three role agents exactly as
+> we tested them, and shows the SQL evidence behind every answer.
 
-## Judges: one-command local setup
+### 1.1 Prerequisites
 
-Prerequisites: Docker Engine/Desktop with **Compose v2** supporting `up --wait`
-and `--wait-timeout`, a running Docker
-daemon, Bash, `curl`, `tar`, `unzip`, and `sha256sum` or `shasum`. On Windows,
-use WSL2 with Docker integration. Host Python and a host database are not needed.
-Allow approximately **4 CPUs, 8 GB RAM allocated to Docker, and 15 GB free disk**
-as a planning budget, not a measured minimum. The raw corpus is about 805 MB,
-archives about 63 MB; images, database storage, and full-text indexes need extra
-space. Initial download, import, and indexing can take several minutes or longer
-on slower machines. Internet access is needed for images, Python packages, and
-Zenodo on the first run. No GPU is required.
+| Needed | Notes |
+|---|---|
+| **Docker** Engine or Desktop with **Compose v2** (`up --wait` support) | The daemon must be running. On Windows use WSL2 with Docker integration. |
+| **Bash, `curl`, `tar`, `unzip`, `sha256sum`** (or `shasum`) | Used by the setup scripts to download and verify the data. |
+| **Internet access on the first run** | Docker images, Python and Node packages, and the corpus from Zenodo. |
+| **Resources** | About 4 CPUs, 8 GB RAM for Docker and 15 GB free disk (raw corpus ~805 MB, plus database and full-text indexes). No GPU. |
+| **For the UI: a Kiro account** | A free AWS Builder ID is enough; you sign in on the page, nothing is installed locally. |
+| Optional, for direct MCP use | Claude Code, Codex, Kiro CLI/IDE or any client that supports MCP over Streamable HTTP. |
+
+No host Python, Node or database, no `.env` file, no credentials and no tunnel are needed. All
+ports are published on `127.0.0.1` only.
+
+### 1.2 Get the code
 
 ```bash
 git clone https://github.com/mamorz/schubki-rubin-logs-processing.git
 cd schubki-rubin-logs-processing
-# Until the jury setup is merged, select the published jury-docker branch.
-git switch jury-docker
+```
+
+### 1.3 Start the MCP server and connect an agent
+
+```bash
 ./scripts/jury-up.sh
 ```
 
-The setup is currently being developed on `jury-docker`; the commands above
-require these changes to be published on that branch before judges clone it.
-No `.env` file or credentials are needed. **Tailscale is NOT required.** Docker
-and the MCP client run on the same computer; all published ports bind to loopback.
+On the first run this:
+- downloads BGL and OpenStack and checks them against the SHA-256 manifest;
+- starts SereneDB 26.09.1.3;
+- creates the schema, loads 4,747,963 BGL and 207,820 OpenStack log lines plus the ownership
+  table, and builds the full-text indexes;
+- starts the MCP server and checks every tool over HTTP.
 
-| Service | Local endpoint |
-| --- | --- |
-| MCP Streamable HTTP | `http://localhost:18000/mcp` |
+Expect several minutes. Later runs only verify; nothing is reloaded. When it prints
+`Jury setup verified`, the server is ready:
+
+| Service | Endpoint |
+|---|---|
+| MCP (Streamable HTTP) | `http://localhost:18000/mcp` |
 | MCP process health | `http://localhost:18000/healthz` |
-| SereneDB SQL | `127.0.0.1:17890` |
-| Optional UI | `http://localhost:16543` |
+| SereneDB (PostgreSQL protocol) | `127.0.0.1:17890` |
+| Optional SQL web UI | `./scripts/jury-compose.sh --profile ui up -d serene-ui` → `http://localhost:16543` |
 
-Every Compose operation in the jury workflow goes through
-`scripts/jury-compose.sh`, which explicitly selects **`schubki-jury`**, this
-repository's Compose file, and an empty environment file. It fixes the published
-ports and ignores inherited project names, alternate Compose files, profiles,
-and external database DSNs. MCP and the setup helper connect only to
-`serenedb:7890/postgres` on the project's own Compose network. The pinned database
-image is SereneDB **26.09.1.3**. The existing named volume
-**`schubki-jury_serenedb-data`** is retained.
-
-The script validates Compose, verifies/downloads the original BGL and OpenStack
-files against the checked-in SHA-256 manifest, builds the existing Dockerfile,
-starts SereneDB, and waits up to 120 seconds for SQL readiness. It inspects the
-catalog before deciding what to do:
-
-- **Empty application database:** run `01_schema.sql` through `05_indexes.sql`,
-  in order, then verify the full corpus and index visibility. SereneDB's bundled
-  `sdb_docs` objects are recognized separately.
-- **Complete database:** verify 4,747,963 BGL rows, 207,820 OpenStack rows (all
-  three sources), four anomaly labels, 22 ownership rows, schema projections,
-  unique identities, and working, fully visible search indexes. Skip all loads.
-- **Partial or unknown state:** stop with an error. No automatic repair, table
-  replacement, index rebuild, or append is attempted. Catalog/query errors also
-  stop setup.
-
-`01_schema.sql` is create-only. Its first unconditional dictionary creation also
-makes concurrent initialization fail before a second loader can append rows.
-A local lock prevents simultaneous startup/download runs from the same checkout.
-SQL scripts are not migrations: do not run individual load scripts on an existing
-DB. The legacy `scripts/load.sh` routes through the same guarded workflow;
-its old recreate flag is rejected.
-
-Once data is ready, setup starts MCP, waits for its HTTP health check, and runs
-`scripts.verify_mcp_http` inside the container against the real HTTP endpoint.
-Success is printed only after transport, tool schemas and the original four
-tool smoke checks pass. The optional `--performance` verifier additionally checks
-the full-corpus spawn analytics contract; `--spikes` checks BGL spike discovery.
-MCP continues to expose only read-only query tools and runs as a non-root user
-with a read-only filesystem.
-SQL trust authentication is intended for this isolated local Compose network;
-the database account itself is not restricted by SQL grants.
-
-Run `./scripts/jury-up.sh` again to restart/recheck the stack. Source checksums
-and SELECT checks run again, but the five million logs are **not reloaded**.
-Keep this checkout's `data/` directory for the SereneDB bind mount. Setup does not
-recreate an existing SereneDB container, upgrade its image, or remove volumes.
-
-## Connect Claude Code or Codex
-
-Choose either client, installed locally:
+Connect any MCP client to `http://localhost:18000/mcp`. The server is named `rubin-log-insights`
+and exposes `health_check`, `search_logs`, `summarize_logs`, `get_nearby_events` and
+`analyze_vm_spawn_performance`.
 
 ```bash
 # Claude Code
 claude mcp add --transport http rubin http://localhost:18000/mcp
-claude mcp list
 
 # Codex CLI (also configures the Codex IDE extension)
 codex mcp add rubin --url http://localhost:18000/mcp
-codex mcp list
 ```
 
-See the official [Claude Code MCP instructions](https://code.claude.com/docs/en/mcp)
-and [Codex HTTP MCP setup](https://developers.openai.com/learn/docs-mcp).
-Restart the client/session if necessary. The tools should be `health_check`,
-`search_logs`, `summarize_logs`, and `get_nearby_events`. Ask the client to call
-`health_check`, search BGL for `core`, summarize OpenStack by `team`, and get nearby
-events for a BGL record ID returned by the search. The ownership mapping is fictional.
+Cursor and other clients: add `http://localhost:18000/mcp` as a remote (HTTP) MCP server. A
+quick check is to ask the client to call `health_check`, search BGL for `kernel panic`,
+summarize OpenStack by `team`, and get nearby events for a record ID returned by the search.
 
-To repeat the automated four-tool verification without importing data:
+These general-purpose clients get the tools but not our role agents. The role prompts live in
+`.kiro/agents/*.json` (sources in `.kiro/agents/prompts/`) and can be reused as instructions.
+
+### 1.4 Connect Kiro — strongly recommended: the RUBIN agent UI
+
+**We strongly recommend judging RUBIN through the agent UI.** It starts everything above, plus a
+container running Kiro CLI with our three role agents preconfigured against the MCP server:
 
 ```bash
-./scripts/jury-compose.sh exec -T mcp-server python -m scripts.verify_mcp_http --url http://127.0.0.1:8000/mcp
-curl --fail http://localhost:18000/healthz
+./scripts/agent-ui-up.sh          # runs jury-up.sh, then builds and starts the UI
 ```
 
-`/healthz` and the `health_check` tool check the process; the other three tools
-exercise the database. No Tailscale, remote endpoint, public URL, or tunnel is
-needed for local judging.
+Open **http://localhost:18080** and:
 
-## Status, shutdown, and recovery
+1. Click **Sign in with Kiro**. The page shows a one-time code and a link. Confirm the code in
+   any browser with your AWS Builder ID. The login stays in a local Docker volume.
+2. Choose **Engineer**, **Team lead** or **Manager** in the dropdown next to the send button.
+   Ask a question or click a suggested one.
+3. Follow the **agent workflow** in the chat: reasoning steps and tool calls appear in the order
+   the agent works. Each card shows the arguments, results (tables, charts, timelines), executed
+   SQL with its parameters, and whether results were truncated.
+4. Use the **evidence ledger** on the right: every query of the current request, earlier requests
+   as folded reports, links back to each card, and a per-request **Export** of the full report
+   (workflow, results, SQL, answer) as Markdown.
 
-Run these commands from the repository:
+Chat history and agent context survive a page reload. Each answer shows the Kiro credits it used.
+Details: [agent-ui/README.md](agent-ui/README.md).
+
+**Alternative: Kiro CLI or IDE directly.** Install Kiro CLI (`curl -fsSL https://cli.kiro.dev/install | bash`)
+and copy the MCP config into the workspace:
 
 ```bash
-./scripts/jury-compose.sh ps
-./scripts/jury-compose.sh logs --tail=100 serenedb mcp-server
-# Stop services while retaining containers and every volume:
-./scripts/jury-compose.sh stop
-# Start again and verify:
-./scripts/jury-up.sh
+mkdir -p .kiro/settings
+cp examples/kiro/mcp.local.example.json .kiro/settings/mcp.json   # rubin-log-insights → 127.0.0.1:18000
+kiro-cli login
+kiro-cli chat --agent engineer        # or team-lead, manager — run from the repository root
 ```
 
-If ports 17890 or 18000 are occupied by another project, stop that project through
-its owner before starting the jury stack. Do not redirect this setup to another
-database. If a download fails, rerun setup: only absent files are fetched, and
-partial downloads/extractions never become final files. A corrupt existing source
-or an archive needed for extraction causes refusal and is preserved for inspection.
+This uses the same agents but shows the evidence only as terminal text. Kiro IDE picks up
+`.kiro/settings/mcp.json` the same way ([Kiro MCP guide](docs/kiro_mcp_integration.md)).
 
-If initialization fails midway (for example, disk exhaustion), preserve the volume
-and ask the maintainers to inspect it. Setup intentionally refuses to resume a
-partial load. It never resets data or repairs an uncertain state. If an interrupted
-process leaves `data/.jury-up.lock`, first confirm that no jury setup or initializer
-is still running, then remove **only that empty lock directory** with
-`rmdir data/.jury-up.lock` and retry. Never remove or prune database volumes.
-
-## Developer setup and alternate loaders
-
-For Python-only development, create a virtual environment with Python 3.12 and
-install `requirements.lock`. Configure an explicit `SERENEDB_DSN` only for direct
-Python commands. Compose deliberately ignores external DSNs. `.env`, `.venv`,
-and raw data remain ignored by Git and Docker; the ownership CSV is tracked.
-
-The existing Python streaming ingestion pipeline remains an optional separate
-workflow: [full-ingestion documentation](docs/full_dataset_ingestion.md). Its
-versioned `loghub_*` tables are not used by the jury SQL backend. The original
-2,000-row sample backend is available for direct Python development with
-`MCP_DATASET_BACKEND=sample`; see [sample backend setup](docs/sample_backend.md).
-Do not mix these loaders into the jury database.
-
-MCP query sessions enforce a **15-second deadline per SQL statement**. Override
-`MCP_SQL_TIMEOUT_SECONDS` (0.001..3600 seconds) in the process environment, or in
-`.env` for direct Python startup. Compose accepts this environment variable too.
-SereneDB 26.09.1.3 enforces `SET SESSION max_execution_time` in milliseconds;
-its PostgreSQL-compatible `statement_timeout` is accepted but is not enforced.
-The MCP connection factory sets and checks the session value before queries run.
-It never changes global settings; direct bulk-loader connections are unaffected.
-Health checks perform no SQL and retain their existing responses.
-
-The deadline is per statement, so tools with multiple SQL statements can take
-longer overall. Native deadlines do not interrupt every blocking function in this
-version (for example, `pg_sleep`). The MCP connection also bounds driver waits,
-sends a PostgreSQL wire cancellation at expiry, and discards the session after
-bounded cancellation cleanup (up to one second to send and one second to drain).
-This uses the pinned psycopg 3.3.6 `Connection.wait` timeout mechanism, including
-its `_WaitTimeout` exception. Keep the MCP client's request timeout above the expected
-whole-tool duration. Connections and cursors are closed after execution failures;
-subsequent requests open fresh sessions. MCP errors distinguish an unavailable
-connection, an execution timeout/cancellation, and other SQL failures, without
-returning database exception details. Server logs retain diagnostic tracebacks.
-
-## MCP tools and Kiro
-
-The six tools are `health_check`, `search_logs`, `summarize_logs` (including
-component, severity, event_id, time and team), `get_nearby_events`,
-`analyze_vm_spawn_performance`, and `detect_log_spikes`. Search
-returns at most 50 records; summaries at most 100 groups; nearby context at most
-50 records on either side. Time filters are inclusive-start/exclusive-end ISO
-timestamps without a timezone. All user filter values remain bound parameters.
-Neither proximity nor log-record counts establish incident causation.
-
-`analyze_vm_spawn_performance` computes exact OpenStack spawn-duration count,
-mean, median, P95/P99, min/max and slow-event counts over the complete population.
-It discovers slow events without a VM ID using an absolute threshold or the
-default baseline P95 × 1.25, with hourly/daily trends and bounded evidence.
-Stored anomaly labels are optional validation metadata and never drive detection.
-See [the interface, full-corpus results, tests and benchmarks](docs/vm_spawn_performance.md).
-
-`detect_log_spikes` discovers BGL component volume spikes with hourly/daily
-baselines, configurable severity or total-volume signals, explicit reference
-periods, complete window counts and bounded exact-message contributors. Missing,
-partial and mixed-clock buckets are handled explicitly. It screens unusual log
-volume without claiming an incident or root cause and never uses stored alert
-labels for detection. See [the method, results and verification](docs/log_spikes.md).
-
-`search_logs` accepts optional `match_mode`: `any` (default, existing OR full-text
-behavior), `phrase` (adjacent ordered tokens anywhere in a message), `exact`
-(equality with the entire stored message, including case and whitespace), or `all`
-(all tokens, any order). Phrase matching uses the existing index dictionary;
-it is not raw string equality. All modes retain filters, complete filtered counts,
-limits, SQL/parameter provenance, and truncation reporting. See
-[search mode semantics, verification, and timings](docs/search_match_modes.md).
-
-For SQL-backed OpenStack, `search_logs` also accepts literal `request_id` and
-`instance_id` filters, permits omitting `query` when either is supplied, and
-returns service/request/VM/HTTP/anomaly metadata. Structured VM equality covers
-compute records primarily; it does not reconstruct a complete lifecycle. See
-[OpenStack tracing examples, limits, tests and Compose verification](docs/openstack_tracing_mcp.md).
-
-`summarize_logs` accepts the same optional `query` and `match_mode` for pattern
-counts, component rankings, fictional team attribution and time trends over all
-matching records. Omitting `query` preserves the existing behavior. Time buckets
-also support `week` and `month`; optional `sort_direction='desc'` shows newest
-periods first. Totals remain independent of the returned-group limit. See
-[the tool schema, live examples, verification, benchmarks and Windows MCP-only update instructions](docs/pattern_aggregation.md).
-
-For OpenStack request/instance tracing, field coverage, tested SELECT examples
-and the slow-boot demo scenario, see
-[OpenStack incident tracing](docs/openstack_incident_tracing.md). VM lifecycle
-correlation (UUID + request_id) is covered in
-[OpenStack VM tracing](docs/openstack_vm_tracing.md).
-
-After the database is ready, run the real read-only HTTP verifier:
+### 1.5 Stop, restart, recover
 
 ```bash
-.venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp
-# After updating MCP with pattern aggregation support:
-.venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp --patterns
-# After updating MCP with all advanced analytics:
-.venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp --patterns --tracing --performance --spikes
+./scripts/jury-compose.sh ps                          # status
+./scripts/jury-compose.sh --profile agent stop        # stop everything, keep data and login
+./scripts/agent-ui-up.sh                              # start again (or jury-up.sh for MCP only)
 ```
 
-Use [the Kiro example](examples/kiro/mcp.local.example.json) and
-[local/remote setup guide](docs/kiro_mcp_integration.md). For another computer,
-prefer an authenticated SSH tunnel to the loopback-only MCP port. No public URL
-or authentication gateway is assumed or provisioned.
+The setup never deletes data. It refuses to continue on a half-loaded database rather than
+guessing. Guarantees, recovery steps and the full test matrix are in
+[docs/operations.md](docs/operations.md).
 
-## Verification
+---
 
-Safe tests need no SereneDB and never load persistent data:
+## 2. What we built
 
-```bash
-.venv/bin/python -m pytest -q
-RUN_LOCAL_HTTP_FIXTURE_TESTS=1 .venv/bin/python -m pytest -q
-./scripts/jury-compose.sh config --quiet
+### 2.1 MCP server: five read-only tools
+
+All tools are parameterised SELECTs against SereneDB. User values are always bound parameters,
+never spliced into SQL. Every result contains the **executed SQL and its parameters**, the
+**complete count** of matching records (independent of the returned limit), and a
+**`truncated`** flag when rows were left out. Counts are **log records, not incidents**.
+
+| Tool | Purpose | Key inputs | Returns |
+|---|---|---|---|
+| `search_logs` | Full-text evidence: find the actual log lines | `dataset` (`bgl`/`openstack`), `query`, `match_mode` (`any`, `all`, `phrase`, `exact`), `start_time`/`end_time`, `component`, `severity`, `limit` (≤ 50, default 20); OpenStack also `request_id`, `instance_id` | matching records (`record_id`, timestamp, component, severity, message; OpenStack adds request/instance/service/HTTP/latency/anomaly fields), `total_corpus_match_count`, `truncated`, SQL |
+| `summarize_logs` | Aggregation over the **whole filtered corpus**: how often, where, who, when | `dataset`, `group_by` (`component`, `team`, `severity`, `event_id`, `time`), `interval` (`hour`/`day`/`week`/`month`), optional `query` + `match_mode` to count one specific pattern, time/component/severity filters, `sort_direction`, `limit` (≤ 100 groups) | groups with `record_count`, `total_matching_record_count`, scope, `truncated`, team **mapping coverage** for `group_by=team`, SQL |
+| `get_nearby_events` | Chronological context around one record | `dataset`, `record_id` (from `search_logs`), `before`/`after` (≤ 50, default 10), `same_component` | anchor, events before/after with second offsets, counts, causation warning, SQL |
+| `analyze_vm_spawn_performance` | OpenStack VM launch performance over the complete population | optional time range, `slow_threshold_seconds` or `baseline_multiplier` (default P95 × 1.25), `baseline_scope`, `interval` (hour/day), `top_limit`, `bucket_limit` | counts, mean/median/P95/P99/min/max, baseline, slow-event detection, slowest events, hourly/daily time series, warnings, SQL |
+| `health_check` | Process readiness | — | status |
+
+More detail: [search modes](docs/search_match_modes.md), [pattern aggregation](docs/pattern_aggregation.md),
+[OpenStack tracing](docs/openstack_tracing_mcp.md), [VM spawn performance](docs/vm_spawn_performance.md).
+
+### 2.2 Role agents: RUBIN v1.5 workflows
+
+The three Kiro agents in `.kiro/agents/` share an evidence-calibrated core and differ by role.
+They may only call the five rubin tools (no shell, file or web access).
+
+**Shared core (all roles):**
+- **Evidence integrity:** every number comes from a tool result in the session and is tagged E1,
+  E2, … and labelled sample- or population-level. Observed facts, hypotheses and recommended
+  checks are kept apart.
+- **Recurrence and frequency gate:** "most common", "recurring", "first" or "all" are only
+  claimed from complete, filtered aggregations, never from a handful of search results.
+- **Causality gate:** timing, shared identifiers or FATAL labels alone never establish a root
+  cause.
+- Built-in knowledge of search accuracy, OpenStack request/VM tracing, VM spawn analytics and
+  evidence-based prioritisation.
+
+| Role | Focus | Typical tool flow | Answer shape |
+|---|---|---|---|
+| **Engineer** | Specific failures, affected nodes/instances/requests, event sequences | `search_logs` → pick real records → `get_nearby_events`; OpenStack pivots on real `request_id`/`instance_id`; spawn outliers via `analyze_vm_spawn_performance` | main finding, tagged evidence, plausible mechanism vs. uncertainty, 2–3 concrete diagnostic checks |
+| **Team lead** | Recurrence of specific patterns, trends, owning teams, investigation order | `summarize_logs` with a pattern `query` and `group_by=time`/`component`/`team`; spawn trends via time buckets | pattern/trend finding, counts and scope, fictional ownership, coordinated next checks and ordering |
+| **Manager** | Priorities and decisions under uncertainty | population-level `summarize_logs` and `analyze_vm_spawn_performance`, few raw lines | recommended priority, 2–3 evidence points, impact marked unverified unless established, one next action |
+
+### 2.3 Agent UI
+
+`agent-ui/` is a React + Fastify app that drives the official Kiro CLI over the Agent Client
+Protocol. It provides:
+- **Device-code sign-in**, the role dropdown and suggested questions per role.
+- **Workflow timeline:** reasoning and tool calls in order, folding automatically after five calls.
+- **Generic evidence cards** built from the shape of any tool result: tables, small-multiple
+  time-series charts, timelines with gaps, stat groups, SQL with parameters, truncation and
+  "not available" notes. New tools need no UI code.
+- **Evidence ledger** with links into the workflow, and per-request Markdown export.
+- **Persistent history:** chat history and Kiro sessions survive page reloads.
+
+See [agent-ui/README.md](agent-ui/README.md).
+
+---
+
+## 3. Worked investigation
+
+### 3.1 The fictional ownership model
+
+The logs say *which component* emitted a line, not *which team* is responsible. To let the Team
+lead and the Manager reason about teams, we **invented a small platform organisation** and mapped
+every component that occurs in the corpus to one owning team:
+
+- **The mapping:** `data/ownership.csv` (`dataset, component, team, area`), loaded into the
+  `ownership` table by `sql/04_load_ownership.sql`. It has 22 assignments, 10 for BGL and 12
+  for OpenStack.
+- **How it's used:** `summarize_logs` with `group_by=team` LEFT JOINs the logs to this table on
+  dataset + component. Unmapped components stay visible as `UNMAPPED` rather than disappearing.
+  Each result reports **mapping coverage** (mapped vs. total records and components) and marks
+  the mapping as fictional.
+- **How the agents treat it:** they say "fictional owner" and attribute teams only through such
+  verified `group_by=team` results. The Manager therefore gets "which team should act first" as
+  real counts per team, without the data pretending to be an org chart.
+
+| Team | Owns (component → area) |
+|---|---|
+| Compute Kernel | BGL `KERNEL`: compute-node kernel (memory/cache/TLB errors, interrupts) |
+| HPC Applications | BGL `APP`: user jobs on compute nodes |
+| Cluster Control | BGL `MMCS`, `BGLMASTER`, `CMCS`, `DISCOVERY`, `SERV_NET`: control system, job launch, discovery, service network |
+| Hardware & Interconnect | BGL `HARDWARE`, `MONITOR`, `LINKCARD`: power, sensors, interconnect link cards |
+| Cloud API | OpenStack `nova.osapi_compute.wsgi.server`, `nova.metadata.wsgi.server`, `…server_external_events`, `nova.api.openstack.wsgi`, `keystonemiddleware.auth_token` |
+| Virtualization | OpenStack `nova.compute.manager`, `nova.virt.libvirt.driver`, `nova.virt.libvirt.imagecache`, `oslo_service.periodic_task` |
+| Capacity & Scheduling | OpenStack `nova.compute.claims`, `nova.compute.resource_tracker`, `nova.scheduler.host_manager` |
+
+Both corpora are fully covered: every component in the loaded data has an owner (100 % mapping
+coverage in the verification run). The teams and areas are deliberately plausible, but they are
+**not an authoritative organisational fact**.
+
+### 3.2 Scenario
+
+<!-- WORKED-INVESTIGATION: filled in from real agent runs through the RUBIN agent UI. -->
+
+_To be completed from a real agent session: the questions per role, the tool calls, executed
+queries and results, each role's answer and recommended action, and what the data does and does
+not establish._
+
+---
+
+## 4. Architecture
+
+```
+                        ┌──────────────────── Docker Compose project "schubki-jury" ────────────────────┐
+ Browser ──HTTP/WS──▶   │ agent-ui :18080   React + Fastify ──stdio ACP──▶ kiro-cli acp --agent <role>   │
+ (judge)                │                                                     │ MCP (Streamable HTTP)    │
+                        │                                                     ▼                          │
+ Claude Code / Codex /  │ mcp-server :18000  server.py → tool handlers → parameterised QueryService      │
+ Kiro CLI ──MCP HTTP──▶ │                                                     │ SQL (PostgreSQL protocol)│
+                        │                                                     ▼                          │
+                        │ serenedb :17890    bgl_logs(+_idx) · openstack_logs(+_idx) · ownership         │
+                        └────────────────────────────────────────────────────────────────────────────────┘
 ```
 
-The HTTP fixture option starts temporary loopback servers with in-memory SQLite
-fixtures built from main's table DDL. It verifies MCP initialization, all four
-tools, validation errors, both current/legacy protocols, joins, source IDs, and
-NULL EventIds. Its `@@` translation to LIKE is **not a SereneDB full-text test**.
+| Service | What it is |
+|---|---|
+| `serenedb` | SereneDB 26.09.1.3 with the base corpus, full-text indexes and the ownership table. Data lives in the `schubki-jury_serenedb-data` volume. |
+| `mcp-server` | Python MCP server (`server.py`, `log_insights/`). Read-only, non-root, read-only filesystem. Only fixed tables and parameterised queries. |
+| `agent-ui` (profile `agent`) | Node 22 + Kiro CLI 2.32.0 (pinned and checksummed). Role agents are mounted read-only from `.kiro/agents`. Kiro may only use rubin tools; the Kiro login lives in the `kiro-home` volume. |
+| `serene-ui` (profile `ui`), `psql` (profile `tools`) | Optional SQL browser and client for inspecting the database. |
 
-With an explicitly supplied, approved read-only `SERENEDB_DSN` for main's already
-loaded schema, run:
+**Data model:**
 
-```bash
-.venv/bin/python -m scripts.check_sql_backend
-RUN_SQL_BACKEND_INTEGRATION_TESTS=1 .venv/bin/python -m pytest tests/test_sql_backend_integration.py -q
-RUN_MCP_HTTP_INTEGRATION_TESTS=1 .venv/bin/python -m pytest tests/test_mcp_http_integration.py -q
-```
+| MCP field / feature | SQL |
+|---|---|
+| BGL corpus / full-text search | `bgl_logs` / `bgl_logs_idx` |
+| OpenStack corpus / full-text search | `openstack_logs` / `openstack_logs_idx` |
+| timestamp / severity / component / message | `ts` (TIMESTAMP without zone) / `level` / `component` / `message` |
+| BGL `record_id` | `line_no` |
+| OpenStack `record_id` | source-file ordinal × 1,000,000,000 + `line_no` (1 = `openstack_abnormal`, 2 = `openstack_normal1`, 3 = `openstack_normal2`) |
+| `event_id` | NULL: the raw logs have no EventId or template |
+| team grouping | LEFT JOIN `ownership` on dataset + component; missing keys → `UNMAPPED` |
 
-The preflight reads this worktree's `.env`; the live pytest test deliberately
-requires the DSN in its process environment and does not search parent `.env`
-files. The HTTP test targets port 18000 unless `MCP_TEST_URL` is set. Preflight
-checks required projections, unique source IDs/mapping keys, null fields, actual
-`@@` execution, and index/table visibility counts, using SELECT only. Live tests
-also execute all aggregation modes, including `date_trunc` time buckets.
+**Repository layout:**
 
-To run the complete suite in Compose against the already-running jury database
-using the existing MCP image and current source:
+| Path | Contents |
+|---|---|
+| `sql/` | Schema, loaders, ownership load and indexes (`01`–`05`) |
+| `data/ownership.csv` | Fictional component → team mapping |
+| `log_insights/`, `server.py` | MCP server: tools, query plans, SereneDB access |
+| `.kiro/agents/` | RUBIN v1.5 role agents (`engineer`, `team-lead`, `manager`) and prompt sources |
+| `agent-ui/` | Browser UI, ACP bridge, generic evidence cards, tests |
+| `scripts/` | `jury-up.sh`, `agent-ui-up.sh`, `jury-compose.sh`, download, verification and benchmark scripts |
+| `docs/` | Tool details, tracing and performance studies, [operations](docs/operations.md) |
+| `tests/` | Python unit and integration tests |
 
-```bash
-./scripts/test-compose.sh
-# Optional pytest selection:
-./scripts/test-compose.sh tests/test_jury_setup.py
-```
+---
 
-The test runner mounts source read-only and shell fixtures on a separate
-executable directory under ignored `artifacts/`. Plain pytest inside the MCP
-service uses its production `/tmp`, which has `noexec` and cannot run temporary
-shell scripts even with mode 0755. The runner enables the SELECT-only SQL and
-temporary HTTP tests; it does not restart deployed services.
+## 5. Known limitations
 
-Legacy tests gated by `RUN_SERENEDB_INTEGRATION_TESTS` still require the separately
-loaded sample/staging schema. The ownership reload test additionally requires
-`ALLOW_SERENEDB_TEST_WRITES=1`; do not enable it on a read-only test endpoint.
-
-The jury setup safety tests use fake catalogs and a recording Docker CLI; they
-never initialize a real database. Implementation validation also runs Compose
-configuration validation and SELECT-only checks against the existing complete
-jury database. A fresh end-to-end initialization must still be rehearsed on an
-explicitly authorized empty installation before distribution; it is intentionally
-not run against existing volumes during development.
+- **Ownership is fictional.** Team results show where to look, not who is accountable.
+- **Counts are log records, not incidents.** One failure can emit many lines; the agents say so.
+- **No causation from logs alone.** Proximity in time and shared identifiers show sequence and
+  association, not root cause. Answers label hypotheses.
+- **No impact data.** The corpora contain no downtime, cost or customer information. The Manager
+  agent marks operational impact as unverified instead of estimating it.
+- **Data scope:** BGL covers 2005-06-03 to 2006-01-04; OpenStack covers about three days
+  (2017-05-14 to 2017-05-17). BGL has no event IDs or templates (`event_id` is NULL). In
+  OpenStack, `instance_id` is set mainly on compute records, and several fields (e.g.
+  `latency_s`) are often empty. The UI lists such columns as "not available".
+- **Spawn performance** measures the hypervisor's reported spawn duration, not full boot time or
+  API latency. Bucket timestamps are completion times.
+- **The agent UI needs a Kiro account** (free Builder ID) and internet access, and uses Kiro
+  credits. It runs the official Kiro CLI over ACP and never calls Kiro's backend directly (Kiro's
+  billing FAQ permits "ACP compatible IDEs" and forbids third-party harnesses that bypass Kiro's
+  own interfaces). It has no authentication of its own and is bound to `127.0.0.1`; don't expose it.
+- **Agent answers are model output.** The SQL and counts in the evidence cards are the ground
+  truth to check them against.
+- **Optional extensions** (on-demand indexing, larger remote datasets, row-level security) are
+  not part of this submission.

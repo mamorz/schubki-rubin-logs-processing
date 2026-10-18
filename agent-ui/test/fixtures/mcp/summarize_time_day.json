@@ -1,0 +1,11 @@
+{
+ "tool": "summarize_logs",
+ "arguments": {
+  "dataset": "openstack",
+  "group_by": "time",
+  "interval": "day",
+  "severity": "ERROR"
+ },
+ "is_error": false,
+ "text": "{\n  \"dataset\": \"openstack\",\n  \"aggregation_type\": \"time_bucket_count\",\n  \"group_by\": \"time\",\n  \"interval\": \"day\",\n  \"applied_filters\": {\n    \"start_time\": null,\n    \"end_time\": null,\n    \"component\": null,\n    \"severity\": \"ERROR\",\n    \"timestamp_bounds\": \"start inclusive, end exclusive\",\n    \"group_limit\": 20\n  },\n  \"groups\": [\n    {\n      \"bucket_start\": \"2017-05-16T00:00:00\",\n      \"record_count\": 145\n    },\n    {\n      \"bucket_start\": \"2017-05-17T00:00:00\",\n      \"record_count\": 49\n    }\n  ],\n  \"returned_group_count\": 2,\n  \"total_matching_record_count\": 194,\n  \"group_limit\": 20,\n  \"truncated\": false,\n  \"scope\": {\n    \"source\": \"SQL-managed openstack corpus; counts reflect currently loaded rows\",\n    \"table\": \"openstack_logs\",\n    \"complete_filtered_scope_aggregated\": true,\n    \"count_unit\": \"log records, not distinct incidents\",\n    \"development_sample\": false\n  },\n  \"provenance\": {\n    \"executed_sql\": {\n      \"aggregation\": \"SELECT\\n    date_trunc('day', ts) AS bucket_start,\\n    COUNT(*) AS record_count\\nFROM openstack_logs\\nWHERE level = %(severity)s\\nGROUP BY date_trunc('day', ts)\\nORDER BY bucket_start\\nLIMIT %(fetch_limit)s\",\n      \"total_count\": \"SELECT COUNT(*) AS total_matching_record_count\\nFROM openstack_logs\\nWHERE level = %(severity)s\"\n    },\n    \"parameters\": {\n      \"aggregation\": {\n        \"severity\": \"ERROR\",\n        \"fetch_limit\": 21\n      },\n      \"total_count\": {\n        \"severity\": \"ERROR\"\n      }\n    }\n  }\n}"
+}

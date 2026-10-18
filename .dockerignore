@@ -17,3 +17,4 @@ artifacts
 .DS_Store
 .kiro/settings/mcp.json
 *.log
+agent-ui

@@ -64,6 +64,41 @@ services:
     depends_on:
       - serenedb
 
+  agent-ui:
+    build:
+      context: ./agent-ui
+    profiles: ["agent"]
+    restart: unless-stopped
+    environment:
+      RUBIN_MCP_URL: http://mcp-server:8000/mcp
+      RUBIN_MCP_SERVER_NAME: rubin-log-insights
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${AGENT_UI_PORT:-18080}:8080"
+    volumes:
+      # Kiro login, sessions and settings for the container user.
+      - kiro-home:/home/app
+      # Role agents shared with the repository (teammates own these files).
+      - ./.kiro/agents:/workspace/.kiro/agents:ro
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - >-
+          fetch('http://127.0.0.1:8080/healthz').then(r => process.exit(r.ok ? 0 : 1), () => process.exit(1))
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /tmp
+    security_opt:
+      - no-new-privileges:true
+
   psql:
     image: postgres:17-alpine
     profiles: ["tools"]
@@ -74,3 +109,4 @@ services:
 volumes:
   # Keep the existing schubki-jury_serenedb-data volume; never rename or remove it.
   serenedb-data:
+  kiro-home:

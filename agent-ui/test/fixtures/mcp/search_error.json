@@ -1,0 +1,9 @@
+{
+ "tool": "search_logs",
+ "arguments": {
+  "dataset": "bgl",
+  "instance_id": "x"
+ },
+ "is_error": true,
+ "text": "Error executing tool search_logs: request_id and instance_id filters require dataset='openstack' with the SQL backend (MCP_DATASET_BACKEND=sql); BGL and sample tables do not support them"
+}
