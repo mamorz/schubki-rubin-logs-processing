@@ -14,6 +14,7 @@ def test_core_tool_names_are_declared() -> None:
         "search_logs",
         "get_nearby_events",
         "summarize_logs",
+        "analyze_vm_spawn_performance",
     }
 
 
@@ -27,6 +28,7 @@ def test_health_tool_is_registered_and_callable() -> None:
                 "health_check",
                 "search_logs",
                 "summarize_logs",
+                "analyze_vm_spawn_performance",
             }
 
             result = await client.call_tool("health_check", {})

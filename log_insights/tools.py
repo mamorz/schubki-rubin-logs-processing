@@ -8,6 +8,7 @@ from typing import Any, Literal, Mapping
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from pydantic import StrictBool, StrictFloat, StrictInt
 
 from .queries import (
     DEFAULT_NEARBY_EVENTS,
@@ -32,6 +33,7 @@ PLANNED_TOOLS: tuple[PlannedTool, ...] = (
     ),
     PlannedTool("get_nearby_events", "Retrieve events around a selected log entry."),
     PlannedTool("summarize_logs", "Calculate complete-scope counts and time trends."),
+    PlannedTool("analyze_vm_spawn_performance", "Measure the complete OpenStack spawn-duration population and discover slow events."),
 )
 
 
@@ -160,6 +162,51 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         except ValueError as error:
             raise ToolError(str(error)) from error
         return _serialize_aggregation_result(result)
+
+    @server.tool()
+    def analyze_vm_spawn_performance(
+        dataset: Literal["openstack"] = "openstack",
+        start_time: str | None = None, end_time: str | None = None,
+        slow_threshold_seconds: StrictFloat | None = None,
+        baseline_multiplier: StrictFloat = 1.25,
+        baseline_scope: Literal["corpus", "analysis"] = "corpus",
+        interval: Literal["hour", "day"] | None = "day",
+        top_limit: StrictInt = 10, bucket_limit: StrictInt = 100,
+        sort_direction: Literal["asc", "desc"] = "desc",
+        include_anomaly_labels: StrictBool = False,
+    ) -> dict[str, Any]:
+        """Discover slow OpenStack VM spawns without knowing an instance ID.
+
+        SQL-backed OpenStack only. Exact count, mean, median, P95, P99, min and
+        max cover ALL valid measured spawn-duration log events, independently of
+        output limits. Events are not deduplicated by VM; unique VM counts are
+        separate. This measures hypervisor spawn duration, not total boot time.
+
+        Slow means unrounded duration strictly greater than slow_threshold_seconds
+        when supplied; otherwise baseline P95 * baseline_multiplier (default 1.25).
+        baseline_scope='corpus' uses all loaded spawn events even when the analysis
+        is time-filtered; 'analysis' uses that range. No anomaly labels are excluded
+        from the baseline. include_anomaly_labels only adds stored is_anomaly
+        metadata; labels never affect detection or ranking.
+
+        Times are naive ISO 8601, start inclusive/end exclusive. Hour/day buckets
+        use completion-log time and the same threshold; empty periods are omitted.
+        Newest buckets come first by default. top_limit is 1..50, bucket_limit
+        1..100. Malformed durations are counted and excluded from statistics.
+        Missing/zero baselines disable relative detection explicitly. Returns
+        complete counts, separate truncation flags, SQL and bound parameters.
+        """
+        try:
+            return queries.analyze_vm_spawn_performance(
+                dataset=dataset, start_time=_parse_timestamp("start_time", start_time),
+                end_time=_parse_timestamp("end_time", end_time),
+                slow_threshold_seconds=slow_threshold_seconds, baseline_multiplier=baseline_multiplier,
+                baseline_scope=baseline_scope, interval=interval, top_limit=top_limit,
+                bucket_limit=bucket_limit, sort_direction=sort_direction,
+                include_anomaly_labels=include_anomaly_labels,
+            )
+        except ValueError as error:
+            raise ToolError(str(error)) from error
 
     @server.tool()
     def get_nearby_events(

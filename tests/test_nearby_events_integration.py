@@ -161,6 +161,7 @@ def test_mcp_nearby_events_matches_direct_sql_for_both_datasets() -> None:
                 "health_check",
                 "search_logs",
                 "summarize_logs",
+                "analyze_vm_spawn_performance",
             }
             assert not (await client.call_tool("health_check", {})).is_error
             assert not (

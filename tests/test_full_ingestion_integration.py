@@ -113,6 +113,7 @@ def test_all_mcp_log_tools_work_against_staging_tables() -> None:
                 "health_check",
                 "search_logs",
                 "summarize_logs",
+                "analyze_vm_spawn_performance",
             }
             assert not (await client.call_tool("health_check", {})).is_error
 
