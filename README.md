@@ -277,6 +277,21 @@ checks required projections, unique source IDs/mapping keys, null fields, actual
 `@@` execution, and index/table visibility counts, using SELECT only. Live tests
 also execute all aggregation modes, including `date_trunc` time buckets.
 
+To run the complete suite in Compose against the already-running jury database
+using the existing MCP image and current source:
+
+```bash
+./scripts/test-compose.sh
+# Optional pytest selection:
+./scripts/test-compose.sh tests/test_jury_setup.py
+```
+
+The test runner mounts source read-only and shell fixtures on a separate
+executable directory under ignored `artifacts/`. Plain pytest inside the MCP
+service uses its production `/tmp`, which has `noexec` and cannot run temporary
+shell scripts even with mode 0755. The runner enables the SELECT-only SQL and
+temporary HTTP tests; it does not restart deployed services.
+
 Legacy tests gated by `RUN_SERENEDB_INTEGRATION_TESTS` still require the separately
 loaded sample/staging schema. The ownership reload test additionally requires
 `ALLOW_SERENEDB_TEST_WRITES=1`; do not enable it on a read-only test endpoint.

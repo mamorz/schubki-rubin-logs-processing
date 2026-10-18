@@ -180,13 +180,13 @@ temporary servers with both current and legacy protocol modes.
 
 Verification results:
 
-- Full Compose suite with executable fixture directory: **436 passed, 0 failed,
-  11 skipped in 14.60 s**, including live Pattern Analytics, Incident Tracing,
+- Full Compose suite through `scripts/test-compose.sh`: **437 passed, 0 failed,
+  11 skipped in 14.69 s**, including live Pattern Analytics, Incident Tracing,
   timestamp regression and both HTTP protocol modes.
-- Host suite: **376 passed, 0 failed, 71 skipped in 7.80 s**. Live integration
+- Host suite: **377 passed, 0 failed, 71 skipped in 5.46 s**. Live integration
   flags were disabled in this host run.
-- Downloader/setup regressions: **27 passed, 0 failed, 0 skipped** in each of
-  Compose (1.73 s) and the host environment (5.37 s).
+- Previously failing shell/download cases plus the new missing-curl guard:
+  **11 passed, 0 failed, 0 skipped in 1.71 s** in Compose.
 - The 11 skipped Compose tests are 10 legacy sample/staging tests and the one
   test targeting the unchanged deployed HTTP container. Updated-code HTTP tests
   did run successfully in the temporary test container.
@@ -199,6 +199,18 @@ or the expected corrupt-file checksum check. The fixture now supplies only the
 used `unzip -p` operation through Python's standard-library ZIP reader, extracting
 real fixture archive bytes. A new regression verifies the actual missing-host-
 executable error; the interruption test also verifies that it reaches curl.
+
+A later run without the executable fixture mount failed ten cases: six workflow
+cases and three download cases could not execute scripts on `/tmp` (`noexec`),
+and the missing-unzip test passed None from `shutil.which` into `symlink_to`.
+Original scripts, copied scripts and the fixture curl had mode 0755. On the
+observed Linux `noexec` mount, `os.access(..., X_OK)` was false despite those mode
+bits, so executable lookup rejected the fixture curl; the slim image has no
+system curl fallback. The prerequisite fixture now references its own curl path
+directly, checks lookup failures for actual host utilities explicitly, and tests
+both missing curl and missing unzip. Production prerequisite failures remain
+errors, not skips. The test-only runner consistently supplies the executable
+bind mount without weakening production `/tmp` or adding runtime packages.
 
 This was a test-environment gap, not an MCP runtime dependency. `jury-up.sh`
 executes `download.sh` on the host before starting/loading database services.
@@ -250,19 +262,16 @@ mkdir -p artifacts
   --repetitions 5 --output /evidence/openstack_tracing_report.json
 ```
 
-For the broad suite including shell-workflow fixtures, bind a writable executable
-test directory and pass `--basetemp`, as the service's `/tmp` is non-executable.
-The test fixture supplies its own ZIP extractor; no extra runtime OS packages are
-needed. No live database writes occur:
+For the full suite including shell-workflow fixtures, use the test-only runner.
+It provides the writable executable fixture mount and `--basetemp`, enables the
+SELECT-only SQL and temporary HTTP tests, and uses current source read-only. The
+test fixtures supply their own curl and ZIP extractor; no extra runtime OS
+packages or live database writes are needed:
 
 ```bash
-mkdir -p artifacts/compose-test-tmp
-./scripts/jury-compose.sh run --rm --no-deps -T \
-  -v "$PWD:/workspace:ro" -v "$PWD/artifacts/compose-test-tmp:/test-tmp" \
-  -w /workspace -e RUN_SQL_BACKEND_INTEGRATION_TESTS=1 \
-  -e RUN_LOCAL_HTTP_FIXTURE_TESTS=1 \
-  mcp-server python -m pytest -q -p no:cacheprovider -rs --tb=short \
-  --basetemp=/test-tmp/pytest
+./scripts/test-compose.sh
+# Optional pytest selection:
+./scripts/test-compose.sh tests/test_jury_setup.py
 ```
 
 After a separately authorized deployment, the extended HTTP verifier supports:

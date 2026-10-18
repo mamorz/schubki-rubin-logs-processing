@@ -344,16 +344,29 @@ def test_corrupt_existing_source_is_preserved(download_fixture):
     assert not Path(env["CALL_LOG"]).exists()
 
 
-def test_download_missing_unzip_stops_before_fetch_or_publish(download_fixture, tmp_path):
+def _assert_missing_download_tool(download_fixture, tmp_path, missing_tool):
     downloader, env, raw, _ = download_fixture
-    # Isolate PATH so a host-installed unzip cannot mask the missing dependency.
-    # Only Bash, dirname and curl are needed before the script checks for unzip.
-    bin_dir = tmp_path / "missing-unzip-bin"
+    # Isolate PATH so host-installed tools cannot mask the missing dependency.
+    bin_dir = tmp_path / "missing-tool-bin"
     bin_dir.mkdir()
     for tool in ("bash", "dirname", "curl"):
-        (bin_dir / tool).symlink_to(shutil.which(tool, path=env["PATH"]))
+        if tool == missing_tool:
+            continue
+        # curl is supplied by download_fixture, not by the slim runtime image.
+        # Do not use executable lookup to rediscover a file we already own.
+        target = tmp_path / "bin/curl" if tool == "curl" else shutil.which(tool, path=env["PATH"])
+        assert target is not None, f"Test environment requires {tool}"
+        (bin_dir / tool).symlink_to(target)
     result = subprocess.run([str(downloader)], env=dict(env, PATH=str(bin_dir)), capture_output=True, text=True)
     assert result.returncode != 0
-    assert "Install unzip first." in result.stderr
+    assert f"Install {missing_tool} first." in result.stderr
     assert not raw.exists()
     assert not Path(env["CALL_LOG"]).exists()
+
+
+def test_download_missing_unzip_stops_before_fetch_or_publish(download_fixture, tmp_path):
+    _assert_missing_download_tool(download_fixture, tmp_path, "unzip")
+
+
+def test_download_missing_curl_stops_before_fetch_or_publish(download_fixture, tmp_path):
+    _assert_missing_download_tool(download_fixture, tmp_path, "curl")
