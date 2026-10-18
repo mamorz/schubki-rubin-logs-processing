@@ -8,6 +8,7 @@ from typing import Any, Mapping, Sequence
 
 from .db import ConnectionFactory
 from .vm_performance import build_vm_spawn_plan, execute_vm_spawn_plan
+from .spikes import build_spike_plan, execute_spike_plan
 from .ingestion import (
     BGL_SEARCH_INDEX,
     BGL_TABLE,
@@ -55,6 +56,7 @@ class DatasetSpec:
     ownership_version: str = OWNERSHIP_VERSION
     development_sample: bool = True
     supports_openstack_tracing: bool = False
+    supports_bgl_spikes: bool = False
 
     @property
     def record_columns(self) -> str:
@@ -112,6 +114,7 @@ SQL_DATASET_SPECS: Mapping[str, DatasetSpec] = {
         ownership_version="main-a75f858",
         development_sample=False,
         supports_openstack_tracing=dataset == "openstack",
+        supports_bgl_spikes=dataset == "bgl",
     )
     for dataset in ("bgl", "openstack")
 }
@@ -594,6 +597,24 @@ class QueryService:
     ) -> None:
         self._connections = connections
         self._dataset_specs = dataset_specs
+
+    def detect_log_spikes(
+        self, *, dataset: str = "bgl", start_time: datetime | None = None, end_time: datetime | None = None,
+        component: str | None = None, interval: str = "hour", signal: str = "severity_volume",
+        severities: list[str] | None = None, baseline_scope: str = "corpus",
+        baseline_start_time: datetime | None = None, baseline_end_time: datetime | None = None,
+        baseline_quantile: float = 0.99, threshold_multiplier: float = 1.5,
+        min_bucket_count: int = 20, min_baseline_buckets: int = 100, max_findings: int = 10,
+        patterns_per_finding: int = 3, evidence_per_pattern: int = 1,
+    ) -> dict[str, Any]:
+        spec = self._dataset_specs[_normalize_dataset(dataset, self._dataset_specs)]
+        plan = build_spike_plan(spec, start_time=start_time, end_time=end_time, component=component,
+            interval=interval, signal=signal, severities=severities, baseline_scope=baseline_scope,
+            baseline_start_time=baseline_start_time, baseline_end_time=baseline_end_time,
+            baseline_quantile=baseline_quantile, threshold_multiplier=threshold_multiplier,
+            min_bucket_count=min_bucket_count, min_baseline_buckets=min_baseline_buckets,
+            max_findings=max_findings, patterns_per_finding=patterns_per_finding, evidence_per_pattern=evidence_per_pattern)
+        return execute_spike_plan(self._connections, plan)
 
     def analyze_vm_spawn_performance(
         self, *, dataset: str = "openstack", start_time: datetime | None = None,

@@ -34,6 +34,7 @@ PLANNED_TOOLS: tuple[PlannedTool, ...] = (
     PlannedTool("get_nearby_events", "Retrieve events around a selected log entry."),
     PlannedTool("summarize_logs", "Calculate complete-scope counts and time trends."),
     PlannedTool("analyze_vm_spawn_performance", "Measure the complete OpenStack spawn-duration population and discover slow events."),
+    PlannedTool("detect_log_spikes", "Screen complete BGL component bucket populations for elevated log volumes."),
 )
 
 
@@ -205,6 +206,60 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
                 bucket_limit=bucket_limit, sort_direction=sort_direction,
                 include_anomaly_labels=include_anomaly_labels,
             )
+        except ValueError as error:
+            raise ToolError(str(error)) from error
+
+    @server.tool()
+    def detect_log_spikes(
+        dataset: Literal["bgl"] = "bgl",
+        start_time: str | None = None, end_time: str | None = None,
+        component: str | None = None, interval: Literal["hour", "day"] = "hour",
+        signal: Literal["severity_volume", "total_volume"] = "severity_volume",
+        severities: list[str] | None = None,
+        baseline_scope: Literal["corpus", "reference"] = "corpus",
+        baseline_start_time: str | None = None, baseline_end_time: str | None = None,
+        baseline_quantile: StrictFloat = 0.99, threshold_multiplier: StrictFloat = 1.5,
+        min_bucket_count: StrictInt = 20, min_baseline_buckets: StrictInt = 100,
+        max_findings: StrictInt = 10, patterns_per_finding: StrictInt = 3, evidence_per_pattern: StrictInt = 1,
+    ) -> dict[str, Any]:
+        """Discover BGL log-volume spikes without specifying suspicious windows.
+
+        SQL-backed BGL only. Default severity_volume includes WARNING, ERROR,
+        SEVERE, FAILURE and FATAL; severities optionally selects BGL levels.
+        total_volume includes every level and rejects severities. Each component
+        baseline uses whole component-active hour/day buckets; INFO-only buckets
+        are valid zero adverse observations. Missing periods are never zero-filled.
+
+        Elevated means selected count >= min_bucket_count AND strictly greater
+        than the baseline's empirical quantile count * threshold_multiplier
+        (default P99 * 1.5), with >=100 baseline buckets by default.
+        This is a screening heuristic, not a calibrated anomaly probability.
+        Labels never affect detection. Insufficient history remains explicit.
+
+        corpus baselines are retrospective and include the analysis. reference
+        requires explicit disjoint analysis and baseline ranges. Timestamps are
+        naive ISO 8601, start inclusive/end exclusive. Partial boundary buckets
+        and globally mixed rounded source-clock offsets are excluded. Contiguous
+        elevated buckets merge only within the same component and never across
+        missing, excluded or non-elevated buckets. Boundaries are log windows,
+        not incident onset/resolution. Spikes do not prove outages or root causes.
+
+        Complete counts precede limits. max_findings is 1..20; patterns_per_finding
+        1..5; evidence_per_pattern 1..3. Exact message/severity contributors carry
+        full counts, percentages, omitted-message remainders and original record
+        references. Long messages are explicitly truncated at 1000 characters.
+        Returns SQL, bound parameters, coverage diagnostics and truncation flags.
+        """
+        try:
+            return queries.detect_log_spikes(dataset=dataset,
+                start_time=_parse_timestamp("start_time", start_time), end_time=_parse_timestamp("end_time", end_time),
+                component=component, interval=interval, signal=signal, severities=severities,
+                baseline_scope=baseline_scope,
+                baseline_start_time=_parse_timestamp("baseline_start_time", baseline_start_time),
+                baseline_end_time=_parse_timestamp("baseline_end_time", baseline_end_time),
+                baseline_quantile=baseline_quantile, threshold_multiplier=threshold_multiplier,
+                min_bucket_count=min_bucket_count, min_baseline_buckets=min_baseline_buckets,
+                max_findings=max_findings, patterns_per_finding=patterns_per_finding, evidence_per_pattern=evidence_per_pattern)
         except ValueError as error:
             raise ToolError(str(error)) from error
 

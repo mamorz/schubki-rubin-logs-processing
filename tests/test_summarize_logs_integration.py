@@ -110,6 +110,7 @@ def test_mcp_grouped_summaries_match_independent_sql() -> None:
                 "search_logs",
                 "summarize_logs",
                 "analyze_vm_spawn_performance",
+                "detect_log_spikes",
             }
             health = await client.call_tool("health_check", {})
             assert health.structured_content["status"] == "ok"

@@ -117,8 +117,9 @@ Once data is ready, setup starts MCP, waits for its HTTP health check, and runs
 `scripts.verify_mcp_http` inside the container against the real HTTP endpoint.
 Success is printed only after transport, tool schemas and the original four
 tool smoke checks pass. The optional `--performance` verifier additionally checks
-the full-corpus spawn analytics contract. MCP continues to expose only
-read-only query tools and runs as a non-root user with a read-only filesystem.
+the full-corpus spawn analytics contract; `--spikes` checks BGL spike discovery.
+MCP continues to expose only read-only query tools and runs as a non-root user
+with a read-only filesystem.
 SQL trust authentication is intended for this isolated local Compose network;
 the database account itself is not restricted by SQL grants.
 
@@ -201,9 +202,9 @@ Do not mix these loaders into the jury database.
 
 ## MCP tools and Kiro
 
-The five tools are `health_check`, `search_logs`, `summarize_logs` (including
-component, severity, event_id, time and team), `get_nearby_events`, and
-`analyze_vm_spawn_performance`. Search
+The six tools are `health_check`, `search_logs`, `summarize_logs` (including
+component, severity, event_id, time and team), `get_nearby_events`,
+`analyze_vm_spawn_performance`, and `detect_log_spikes`. Search
 returns at most 50 records; summaries at most 100 groups; nearby context at most
 50 records on either side. Time filters are inclusive-start/exclusive-end ISO
 timestamps without a timezone. All user filter values remain bound parameters.
@@ -215,6 +216,13 @@ It discovers slow events without a VM ID using an absolute threshold or the
 default baseline P95 × 1.25, with hourly/daily trends and bounded evidence.
 Stored anomaly labels are optional validation metadata and never drive detection.
 See [the interface, full-corpus results, tests and benchmarks](docs/vm_spawn_performance.md).
+
+`detect_log_spikes` discovers BGL component volume spikes with hourly/daily
+baselines, configurable severity or total-volume signals, explicit reference
+periods, complete window counts and bounded exact-message contributors. Missing,
+partial and mixed-clock buckets are handled explicitly. It screens unusual log
+volume without claiming an incident or root cause and never uses stored alert
+labels for detection. See [the method, results and verification](docs/log_spikes.md).
 
 `search_logs` accepts optional `match_mode`: `any` (default, existing OR full-text
 behavior), `phrase` (adjacent ordered tokens anywhere in a message), `exact`
@@ -250,7 +258,7 @@ After the database is ready, run the real read-only HTTP verifier:
 # After updating MCP with pattern aggregation support:
 .venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp --patterns
 # After updating MCP with all advanced analytics:
-.venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp --patterns --tracing --performance
+.venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp --patterns --tracing --performance --spikes
 ```
 
 Use [the Kiro example](examples/kiro/mcp.local.example.json) and
