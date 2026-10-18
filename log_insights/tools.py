@@ -8,6 +8,7 @@ from typing import Any, Literal, Mapping
 
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
+from pydantic import StrictBool, StrictFloat, StrictInt
 
 from .queries import (
     DEFAULT_NEARBY_EVENTS,
@@ -32,6 +33,7 @@ PLANNED_TOOLS: tuple[PlannedTool, ...] = (
     ),
     PlannedTool("get_nearby_events", "Retrieve events around a selected log entry."),
     PlannedTool("summarize_logs", "Calculate complete-scope counts and time trends."),
+    PlannedTool("analyze_vm_spawn_performance", "Measure the complete OpenStack spawn-duration population and discover slow events."),
 )
 
 
@@ -51,13 +53,15 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
     @server.tool()
     def search_logs(
         dataset: str,
-        query: str,
+        query: str | None = None,
         start_time: str | None = None,
         end_time: str | None = None,
         component: str | None = None,
         severity: str | None = None,
         limit: int = DEFAULT_SEARCH_LIMIT,
         match_mode: Literal["any", "phrase", "exact", "all"] = "any",
+        request_id: str | None = None,
+        instance_id: str | None = None,
     ) -> dict[str, Any]:
         """Search BGL or OpenStack messages with optional filters and match_mode.
 
@@ -68,6 +72,20 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         punctuation, and all whitespace; not a substring or token phrase. Copy a
         returned message verbatim for exact lookup; empty messages are allowed.
         all: every query token must occur, in any order, without adjacency.
+
+        SQL-backed OpenStack also supports literal request_id and instance_id
+        equality filters, combined with AND. Omit query only when at least one
+        identifier is supplied; a supplied query additionally filters messages.
+        These filters are unavailable for BGL and sample tables. OpenStack SQL
+        records include request_id, instance_id, service, http_status, latency_s,
+        and is_anomaly; missing values remain null.
+
+        instance_id usually covers compute records only: API URLs can mention
+        the VM without setting this column. For message mentions, use a separate
+        phrase query for the full UUID and inspect its evidence. Neither lookup
+        guarantees a complete VM lifecycle. Background request contexts can span
+        unrelated VMs; do not expand them into a VM trace. is_anomaly is a stored
+        injected-VM label, not a detector; slow boots can lack error messages.
 
         Timestamps must be ISO 8601 values without timezone information. Start is
         inclusive and end is exclusive. Results default to 20 and are capped at 50.
@@ -85,6 +103,8 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
                 severity=severity,
                 limit=limit,
                 match_mode=match_mode,
+                request_id=request_id,
+                instance_id=instance_id,
             )
         except ValueError as error:
             raise ToolError(str(error)) from error
@@ -100,14 +120,29 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         component: str | None = None,
         severity: str | None = None,
         limit: int = DEFAULT_SUMMARY_LIMIT,
+        query: str | None = None,
+        match_mode: Literal["any", "phrase", "exact", "all"] = "any",
+        sort_direction: Literal["asc", "desc"] = "asc",
     ) -> dict[str, Any]:
         """Count logs by component, fictional owner team, severity, event_id, or time.
 
         Use group_by='team' for a LEFT JOIN to the configured fictional ownership map;
         unmatched components remain visible as UNMAPPED. Use group_by='time' with
-        interval='hour' or 'day'. Counts cover the complete filtered configured
+        interval='hour', 'day', 'week' (Monday start), or 'month' (calendar start).
+        Time buckets default to ascending order (earliest first); use
+        sort_direction='desc' for newest first. A truncated time series omits
+        periods beyond limit; narrow the time range or increase limit to see more.
+        Counts cover the complete filtered configured
         corpus; limit only bounds returned groups. Timestamps are naive ISO 8601
         values with inclusive start and exclusive end.
+
+        Optional query searches messages with the same semantics as search_logs:
+        any (default) matches any token; all requires every token in any order;
+        phrase matches consecutive tokens in order using index normalization;
+        exact compares the ENTIRE stored raw message, including case, punctuation,
+        and whitespace. Omit query to aggregate all filtered logs. Empty query is
+        valid only for exact. Totals and fictional ownership coverage use every
+        matching record, independently of limit; truncated flags omitted groups.
         """
 
         try:
@@ -120,10 +155,58 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
                 component=component,
                 severity=severity,
                 limit=limit,
+                query=query,
+                match_mode=match_mode,
+                sort_direction=sort_direction,
             )
         except ValueError as error:
             raise ToolError(str(error)) from error
         return _serialize_aggregation_result(result)
+
+    @server.tool()
+    def analyze_vm_spawn_performance(
+        dataset: Literal["openstack"] = "openstack",
+        start_time: str | None = None, end_time: str | None = None,
+        slow_threshold_seconds: StrictFloat | None = None,
+        baseline_multiplier: StrictFloat = 1.25,
+        baseline_scope: Literal["corpus", "analysis"] = "corpus",
+        interval: Literal["hour", "day"] | None = "day",
+        top_limit: StrictInt = 10, bucket_limit: StrictInt = 100,
+        sort_direction: Literal["asc", "desc"] = "desc",
+        include_anomaly_labels: StrictBool = False,
+    ) -> dict[str, Any]:
+        """Discover slow OpenStack VM spawns without knowing an instance ID.
+
+        SQL-backed OpenStack only. Exact count, mean, median, P95, P99, min and
+        max cover ALL valid measured spawn-duration log events, independently of
+        output limits. Events are not deduplicated by VM; unique VM counts are
+        separate. This measures hypervisor spawn duration, not total boot time.
+
+        Slow means unrounded duration strictly greater than slow_threshold_seconds
+        when supplied; otherwise baseline P95 * baseline_multiplier (default 1.25).
+        baseline_scope='corpus' uses all loaded spawn events even when the analysis
+        is time-filtered; 'analysis' uses that range. No anomaly labels are excluded
+        from the baseline. include_anomaly_labels only adds stored is_anomaly
+        metadata; labels never affect detection or ranking.
+
+        Times are naive ISO 8601, start inclusive/end exclusive. Hour/day buckets
+        use completion-log time and the same threshold; empty periods are omitted.
+        Newest buckets come first by default. top_limit is 1..50, bucket_limit
+        1..100. Malformed durations are counted and excluded from statistics.
+        Missing/zero baselines disable relative detection explicitly. Returns
+        complete counts, separate truncation flags, SQL and bound parameters.
+        """
+        try:
+            return queries.analyze_vm_spawn_performance(
+                dataset=dataset, start_time=_parse_timestamp("start_time", start_time),
+                end_time=_parse_timestamp("end_time", end_time),
+                slow_threshold_seconds=slow_threshold_seconds, baseline_multiplier=baseline_multiplier,
+                baseline_scope=baseline_scope, interval=interval, top_limit=top_limit,
+                bucket_limit=bucket_limit, sort_direction=sort_direction,
+                include_anomaly_labels=include_anomaly_labels,
+            )
+        except ValueError as error:
+            raise ToolError(str(error)) from error
 
     @server.tool()
     def get_nearby_events(
@@ -137,7 +220,9 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
 
         Neighbors are ordered by timestamp and record_id. Set same_component to true
         to restrict context to the anchor's component. Temporal proximity is
-        evidence of sequence only and does not establish causation.
+        evidence of sequence only and does not establish causation. This is global
+        chronological context, not a request or VM trace; unrelated API polls may
+        appear. Use search_logs identifier filters for literal OpenStack lookups.
         """
 
         try:
