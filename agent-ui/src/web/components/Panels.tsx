@@ -198,6 +198,9 @@ function ExportReport({ turn }: { turn: Turn }) {
   );
 }
 
+/** Tool names longer than this leave no room for the full truncation chip in the ledger column. */
+const LONG_TOOL_NAME = 18;
+
 function LedgerEntries({ calls, compact = false }: { calls: ToolCallView[]; compact?: boolean }) {
   const focusToolCall = useChat((s) => s.focusToolCall);
   return (
@@ -214,14 +217,14 @@ function LedgerEntries({ calls, compact = false }: { calls: ToolCallView[]; comp
             >
             <div className="flex items-center gap-2">
               <span className="grid size-5 place-items-center rounded-full bg-slate-100 text-[11px] font-semibold dark:bg-slate-800">{index + 1}</span>
-              <span className="font-mono text-xs font-medium">{call.tool}</span>
-              <span className="ml-auto flex items-center gap-1.5">
-                <TruncationBadge model={model} />
+              <span className="min-w-0 truncate font-mono text-xs font-medium" title={call.tool ?? undefined}>{call.tool}</span>
+              <span className="ml-auto flex shrink-0 items-center gap-1.5">
+                <TruncationBadge model={model} compact={(call.tool ?? "").length > LONG_TOOL_NAME} />
                 <ArrowUpRight className="size-3.5 text-slate-400 transition group-hover:text-ruby-500" />
               </span>
             </div>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{model?.headline ?? "no structured result"}</p>
-            {call.input && (
+            {call.input && Object.keys(call.input).length > 0 && (
               <p className="mt-1 truncate font-mono text-[11px] text-slate-500" title={JSON.stringify(call.input)}>
                 {JSON.stringify(call.input)}
               </p>

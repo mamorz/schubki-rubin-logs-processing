@@ -122,11 +122,16 @@ function StatusIcon({ status }: { status: ToolCallView["status"] }) {
   return <Loader2 className="size-4 animate-spin text-slate-400" aria-label="running" />;
 }
 
-export function TruncationBadge({ model }: { model: ResultModel | null }) {
+/** Full chip by default; `compact` (narrow rows) shows only a small icon when truncated and nothing when complete. */
+export function TruncationBadge({ model, compact = false }: { model: ResultModel | null; compact?: boolean }) {
   if (!model || model.truncated === null || model.error) return null;
   const sections = [...new Set(model.truncatedSections)].join(", ");
+  const title = sections ? `Truncated: ${sections}` : "Not every matching row was returned";
+  if (compact) {
+    return model.truncated ? <AlertTriangle className="size-3.5 shrink-0 text-amber-600 dark:text-amber-400" aria-label={title}><title>{title}</title></AlertTriangle> : null;
+  }
   return model.truncated ? (
-    <span className="chip bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" title={sections ? `Truncated: ${sections}` : "Not every matching row was returned"}>
+    <span className="chip bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" title={title}>
       <AlertTriangle className="size-3" /> truncated
     </span>
   ) : (
