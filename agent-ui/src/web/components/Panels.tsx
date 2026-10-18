@@ -73,15 +73,7 @@ export function EvidenceLedger({ onClear }: { onClear: () => void }) {
       )}
       <GemScroll className="min-h-0 flex-1" contentClassName="space-y-3" thumb={<FileThumb />} label="Scroll evidence ledger">
         {current && completedOf(current).length > 0 && (
-          <section>
-            <div className="mb-1.5 flex items-center gap-2">
-              <h3 className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500" title={current.question}>
-                Current request · {roleLabel(current.role)}
-              </h3>
-              <ExportReport turn={current} />
-            </div>
-            <LedgerEntries calls={completedOf(current)} />
-          </section>
+          <CurrentReport key={current.id} turn={current} calls={completedOf(current)} />
         )}
         {previous.length > 0 && (
           <section className="space-y-1.5">
@@ -136,6 +128,36 @@ function ConfirmClear({ disabled, requests, onConfirm }: { disabled: boolean; re
 
 function roleLabel(role: RoleId): string {
   return ROLES.find((r) => r.id === role)?.label ?? role;
+}
+
+/** The latest request's evidence: open by default, foldable to a one-line summary. */
+function CurrentReport({ turn, calls }: { turn: Turn; calls: ToolCallView[] }) {
+  const [open, setOpen] = useState(true);
+  const truncated = calls.filter((c) => describeResult(c.output)?.truncated).length;
+  return (
+    <Collapsible.Root open={open} onOpenChange={setOpen} asChild>
+      <section>
+        <div className="mb-1.5 flex items-center gap-2">
+          <Collapsible.Trigger
+            className="flex min-w-0 flex-1 items-center gap-1.5 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700 dark:hover:text-slate-300"
+            title={turn.question}
+          >
+            <ChevronRight className={`size-3.5 shrink-0 transition ${open ? "rotate-90" : ""}`} />
+            <span className="truncate">Current request · {roleLabel(turn.role)}</span>
+            {!open && (
+              <span className="shrink-0 font-normal normal-case">
+                · {calls.length} quer{calls.length === 1 ? "y" : "ies"}{truncated > 0 ? `, ${truncated} truncated` : ""}
+              </span>
+            )}
+          </Collapsible.Trigger>
+          <ExportReport turn={turn} />
+        </div>
+        <Collapsible.Content>
+          <LedgerEntries calls={calls} />
+        </Collapsible.Content>
+      </section>
+    </Collapsible.Root>
+  );
 }
 
 function PreviousReport({ turn, calls }: { turn: Turn; calls: ToolCallView[] }) {
