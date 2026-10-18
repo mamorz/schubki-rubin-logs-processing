@@ -216,7 +216,9 @@ limits, SQL/parameter provenance, and truncation reporting. See
 
 For OpenStack request/instance tracing, field coverage, tested SELECT examples
 and the slow-boot demo scenario, see
-[OpenStack incident tracing](docs/openstack_incident_tracing.md).
+[OpenStack incident tracing](docs/openstack_incident_tracing.md). VM lifecycle
+correlation (UUID + request_id) is covered in
+[OpenStack VM tracing](docs/openstack_vm_tracing.md).
 
 After the database is ready, run the real read-only HTTP verifier:
 
