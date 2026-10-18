@@ -11,12 +11,14 @@ import anyio
 from mcp import Client
 
 EXPECTED_TOOLS = {
+    "analyze_vm_spawn_performance",
     "get_nearby_events",
     "health_check",
     "search_logs",
     "summarize_logs",
 }
 REQUIRED_INPUTS = {
+    "analyze_vm_spawn_performance": set(),
     "get_nearby_events": {"dataset", "record_id"},
     "health_check": set(),
     "search_logs": {"dataset"},
@@ -140,7 +142,49 @@ async def verify_openstack_tracing(client: Client) -> dict[str, Any]:
     return dict(request_count=12, instance_count=25, message_mention_count=28, spawn_count=1)
 
 
-async def verify_endpoint(url: str, *, mode: str = "auto", patterns: bool = False, tracing: bool = False) -> dict[str, Any]:
+async def verify_vm_spawn_performance(client: Client) -> dict[str, Any]:
+    """Validate full-corpus baselines, strict thresholds and bounded outputs."""
+    tool = next(t for t in (await client.list_tools()).tools if t.name == "analyze_vm_spawn_performance")
+    assert not tool.input_schema.get("required")
+    assert tool.input_schema["properties"]["baseline_multiplier"]["default"] == 1.25
+    assert tool.input_schema["properties"]["baseline_scope"]["default"] == "corpus"
+    async def analyze(**args):
+        response = await client.call_tool(tool.name, args)
+        assert not response.is_error
+        data = response.structured_content
+        assert data["provenance"]["statement_count"] == 1
+        assert data["scope"]["complete_population_aggregated"] is True
+        return data
+    small = await analyze(top_limit=1, bucket_limit=1)
+    complete = await analyze(top_limit=50, bucket_limit=100, include_anomaly_labels=True)
+    assert small["counts"]["spawn_event_count"] == 2066
+    assert small["counts"]["invalid_duration_record_count"] == 0
+    for key in ("counts", "statistics", "baseline", "detection"):
+        assert small[key] == complete[key]
+    stats = complete["statistics"]
+    assert abs(stats["median_seconds"] - 19.74) < 1e-10
+    assert abs(stats["p95_seconds"] - 21.0075) < 1e-10
+    assert abs(stats["p99_seconds"] - 21.6635) < 1e-10
+    assert stats["min_seconds"] == 10.12 and stats["max_seconds"] == 50.72
+    assert small["detection"]["slow_event_count"] == 5
+    assert small["ranking"]["truncated"] and small["ranking"]["slow_events_truncated"]
+    assert small["time_series"]["truncated"] and not complete["time_series"]["truncated"]
+    assert sum(b["spawn_event_count"] for b in complete["time_series"]["buckets"]) == 2066
+    assert sum(b["slow_event_count"] for b in complete["time_series"]["buckets"]) == 5
+    vm = next(r for r in complete["slowest_spawn_events"] if r["instance_id"] == "544fd51c-4edc-4780-baae-ba1d80a0acfc")
+    assert vm["duration_seconds"] == 41.81
+    assert "is_anomaly" not in small["slowest_spawn_events"][0]
+    for threshold, expected in ((25.0, 5), (30.0, 3), (50.72, 0)):
+        data = await analyze(slow_threshold_seconds=threshold)
+        assert data["detection"]["slow_event_count"] == expected
+    invalid = await client.call_tool(tool.name, {"slow_threshold_seconds": -1})
+    assert invalid.is_error
+    return dict(spawn_event_count=2066, statistics=stats, default_slow_event_count=5,
+                effective_threshold_seconds=small["detection"]["effective_threshold_seconds"])
+
+
+async def verify_endpoint(url: str, *, mode: str = "auto", patterns: bool = False, tracing: bool = False,
+                          performance: bool = False) -> dict[str, Any]:
     """Verify initialization, schemas, read-only tools, and error handling."""
 
     async with Client(url, read_timeout_seconds=30, mode=mode) as client:
@@ -284,6 +328,8 @@ async def verify_endpoint(url: str, *, mode: str = "auto", patterns: bool = Fals
             report["pattern_aggregation"] = await verify_pattern_aggregations(client)
         if tracing:
             report["openstack_tracing"] = await verify_openstack_tracing(client)
+        if performance:
+            report["vm_spawn_performance"] = await verify_vm_spawn_performance(client)
         return report
 
 
@@ -297,13 +343,14 @@ def _parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--patterns", action="store_true", help="Also verify pattern aggregation on the full SQL corpora")
     parser.add_argument("--tracing", action="store_true", help="Also verify OpenStack structured tracing on the full SQL corpus")
+    parser.add_argument("--performance", action="store_true", help="Also verify exact OpenStack spawn baselines and slow-event detection")
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     async def run():
-        return await verify_endpoint(args.url, patterns=args.patterns, tracing=args.tracing)
+        return await verify_endpoint(args.url, patterns=args.patterns, tracing=args.tracing, performance=args.performance)
     print(json.dumps(anyio.run(run), indent=2, default=str))
 
 

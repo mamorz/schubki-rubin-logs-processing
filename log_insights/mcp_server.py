@@ -28,7 +28,9 @@ def build_server(
         instructions=(
             "Use search_logs for bounded evidence, summarize_logs for aggregate "
             "counts, and get_nearby_events for chronological context. Team ownership "
-            "is explicitly fictional and unmapped components remain visible."
+            "is explicitly fictional and unmapped components remain visible. "
+            "Use analyze_vm_spawn_performance to discover slow VM spawns and "
+            "calculate exact fleet duration baselines without knowing a VM ID."
         ),
         version="1.0.0",
     )

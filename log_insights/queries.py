@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Mapping, Sequence
 
 from .db import ConnectionFactory
+from .vm_performance import build_vm_spawn_plan, execute_vm_spawn_plan
 from .ingestion import (
     BGL_SEARCH_INDEX,
     BGL_TABLE,
@@ -593,6 +594,23 @@ class QueryService:
     ) -> None:
         self._connections = connections
         self._dataset_specs = dataset_specs
+
+    def analyze_vm_spawn_performance(
+        self, *, dataset: str = "openstack", start_time: datetime | None = None,
+        end_time: datetime | None = None, slow_threshold_seconds: float | None = None,
+        baseline_multiplier: float = 1.25, baseline_scope: str = "corpus",
+        interval: str | None = "day", top_limit: int = 10, bucket_limit: int = 100,
+        sort_direction: str = "desc", include_anomaly_labels: bool = False,
+    ) -> dict[str, Any]:
+        spec = self._dataset_specs[_normalize_dataset(dataset, self._dataset_specs)]
+        plan = build_vm_spawn_plan(
+            spec, start_time=start_time, end_time=end_time,
+            slow_threshold_seconds=slow_threshold_seconds, baseline_multiplier=baseline_multiplier,
+            baseline_scope=baseline_scope, interval=interval, top_limit=top_limit,
+            bucket_limit=bucket_limit, sort_direction=sort_direction,
+            include_anomaly_labels=include_anomaly_labels,
+        )
+        return execute_vm_spawn_plan(self._connections, plan)
 
     def search_logs(
         self,

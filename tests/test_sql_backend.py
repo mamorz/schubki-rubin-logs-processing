@@ -190,7 +190,7 @@ def test_default_server_routes_all_tools_to_sql_fixture(monkeypatch, sql_fixture
 
     async def run():
         async with Client(build_server(Settings(None))) as client:
-            assert len((await client.list_tools()).tools) == 4
+            assert len((await client.list_tools()).tools) == 5
             assert not (await client.call_tool("health_check", {})).is_error
             for dataset, term in (("bgl", "core"), ("openstack", "instance")):
                 search = await client.call_tool("search_logs", {"dataset": dataset, "query": term})

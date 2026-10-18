@@ -115,7 +115,9 @@ its old recreate flag is rejected.
 
 Once data is ready, setup starts MCP, waits for its HTTP health check, and runs
 `scripts.verify_mcp_http` inside the container against the real HTTP endpoint.
-Success is printed only after all four tools pass. MCP continues to expose only
+Success is printed only after transport, tool schemas and the original four
+tool smoke checks pass. The optional `--performance` verifier additionally checks
+the full-corpus spawn analytics contract. MCP continues to expose only
 read-only query tools and runs as a non-root user with a read-only filesystem.
 SQL trust authentication is intended for this isolated local Compose network;
 the database account itself is not restricted by SQL grants.
@@ -199,12 +201,20 @@ Do not mix these loaders into the jury database.
 
 ## MCP tools and Kiro
 
-The four tools are `health_check`, `search_logs`, `summarize_logs` (including
-component, severity, event_id, time and team), and `get_nearby_events`. Search
+The five tools are `health_check`, `search_logs`, `summarize_logs` (including
+component, severity, event_id, time and team), `get_nearby_events`, and
+`analyze_vm_spawn_performance`. Search
 returns at most 50 records; summaries at most 100 groups; nearby context at most
 50 records on either side. Time filters are inclusive-start/exclusive-end ISO
 timestamps without a timezone. All user filter values remain bound parameters.
 Neither proximity nor log-record counts establish incident causation.
+
+`analyze_vm_spawn_performance` computes exact OpenStack spawn-duration count,
+mean, median, P95/P99, min/max and slow-event counts over the complete population.
+It discovers slow events without a VM ID using an absolute threshold or the
+default baseline P95 × 1.25, with hourly/daily trends and bounded evidence.
+Stored anomaly labels are optional validation metadata and never drive detection.
+See [the interface, full-corpus results, tests and benchmarks](docs/vm_spawn_performance.md).
 
 `search_logs` accepts optional `match_mode`: `any` (default, existing OR full-text
 behavior), `phrase` (adjacent ordered tokens anywhere in a message), `exact`
@@ -239,6 +249,8 @@ After the database is ready, run the real read-only HTTP verifier:
 .venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp
 # After updating MCP with pattern aggregation support:
 .venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp --patterns
+# After updating MCP with all advanced analytics:
+.venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp --patterns --tracing --performance
 ```
 
 Use [the Kiro example](examples/kiro/mcp.local.example.json) and

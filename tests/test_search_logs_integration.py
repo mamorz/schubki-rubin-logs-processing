@@ -115,6 +115,7 @@ def test_mcp_search_logs_matches_direct_sql_for_both_datasets() -> None:
                 "health_check",
                 "search_logs",
                 "summarize_logs",
+                "analyze_vm_spawn_performance",
             }
 
             health = await client.call_tool("health_check", {})
