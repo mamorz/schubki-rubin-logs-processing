@@ -214,6 +214,10 @@ it is not raw string equality. All modes retain filters, complete filtered count
 limits, SQL/parameter provenance, and truncation reporting. See
 [search mode semantics, verification, and timings](docs/search_match_modes.md).
 
+For OpenStack request/instance tracing, field coverage, tested SELECT examples
+and the slow-boot demo scenario, see
+[OpenStack incident tracing](docs/openstack_incident_tracing.md).
+
 After the database is ready, run the real read-only HTTP verifier:
 
 ```bash
