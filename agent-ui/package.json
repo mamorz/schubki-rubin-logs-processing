@@ -18,6 +18,7 @@
     "@agentclientprotocol/sdk": "1.7.0",
     "@fastify/static": "10.1.5",
     "@fastify/websocket": "11.3.3",
+    "@radix-ui/react-alert-dialog": "1.1.23",
     "@radix-ui/react-collapsible": "1.1.20",
     "fastify": "5.12.5",
     "lucide-react": "1.51.0",

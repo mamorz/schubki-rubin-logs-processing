@@ -1,3 +1,4 @@
+import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { ChevronRight, Download, ExternalLink, FileSearch, FileText, Folder, KeyRound, Loader2, LogOut, Trash2 } from "lucide-react";
 import { useState } from "react";
@@ -71,9 +72,7 @@ export function EvidenceLedger({ onClear }: { onClear: () => void }) {
           >
             <Download className="size-3.5" /> Export
           </button>
-          <button type="button" className="btn-ghost px-2 py-1 text-xs" disabled={turns.length === 0} onClick={onClear} title="Clear the conversation and start fresh agent sessions">
-            <Trash2 className="size-3.5" />
-          </button>
+          <ConfirmClear disabled={turns.length === 0} requests={turns.length} onConfirm={onClear} />
         </div>
       </div>
       {total === 0 && (
@@ -104,6 +103,41 @@ export function EvidenceLedger({ onClear }: { onClear: () => void }) {
 /** Small ruby-coloured file used as the ledger's scroll handle. */
 function FileThumb() {
   return <FileText className="size-[18px] text-ruby-500 drop-shadow-[0_0_5px_rgba(244,63,94,0.75)]" strokeWidth={2.25} />;
+}
+
+/** Trash button that asks before wiping the conversation, evidence and saved agent sessions. */
+function ConfirmClear({ disabled, requests, onConfirm }: { disabled: boolean; requests: number; onConfirm: () => void }) {
+  return (
+    <AlertDialog.Root>
+      <AlertDialog.Trigger asChild>
+        <button type="button" className="btn-ghost px-2 py-1 text-xs" disabled={disabled} title="Delete chat history">
+          <Trash2 className="size-3.5" />
+        </button>
+      </AlertDialog.Trigger>
+      <AlertDialog.Portal>
+        <AlertDialog.Overlay className="fixed inset-0 z-40 bg-slate-950/60 backdrop-blur-sm" />
+        <AlertDialog.Content className="panel fixed top-1/2 left-1/2 z-50 w-[calc(100vw-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 p-5 shadow-xl">
+          <div className="flex items-start gap-3">
+            <span className="grid size-9 shrink-0 place-items-center rounded-full bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-300">
+              <Trash2 className="size-4" />
+            </span>
+            <div>
+              <AlertDialog.Title className="font-semibold">Delete chat history?</AlertDialog.Title>
+              <AlertDialog.Description className="mt-1 text-sm text-slate-600 dark:text-slate-400">
+                This removes {requests} request{requests === 1 ? "" : "s"} with their answers and evidence from this browser, and the agents start fresh sessions without the earlier context. Export the ledger first if you want to keep the evidence. This can't be undone.
+              </AlertDialog.Description>
+            </div>
+          </div>
+          <div className="mt-5 flex justify-end gap-2">
+            <AlertDialog.Cancel className="btn-ghost">Cancel</AlertDialog.Cancel>
+            <AlertDialog.Action onClick={onConfirm} className="btn bg-red-600 text-white hover:bg-red-700 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-red-500">
+              Delete history
+            </AlertDialog.Action>
+          </div>
+        </AlertDialog.Content>
+      </AlertDialog.Portal>
+    </AlertDialog.Root>
+  );
 }
 
 function roleLabel(role: RoleId): string {
