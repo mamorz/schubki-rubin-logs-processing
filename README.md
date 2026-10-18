@@ -214,10 +214,31 @@ it is not raw string equality. All modes retain filters, complete filtered count
 limits, SQL/parameter provenance, and truncation reporting. See
 [search mode semantics, verification, and timings](docs/search_match_modes.md).
 
+For SQL-backed OpenStack, `search_logs` also accepts literal `request_id` and
+`instance_id` filters, permits omitting `query` when either is supplied, and
+returns service/request/VM/HTTP/anomaly metadata. Structured VM equality covers
+compute records primarily; it does not reconstruct a complete lifecycle. See
+[OpenStack tracing examples, limits, tests and Compose verification](docs/openstack_tracing_mcp.md).
+
+`summarize_logs` accepts the same optional `query` and `match_mode` for pattern
+counts, component rankings, fictional team attribution and time trends over all
+matching records. Omitting `query` preserves the existing behavior. Time buckets
+also support `week` and `month`; optional `sort_direction='desc'` shows newest
+periods first. Totals remain independent of the returned-group limit. See
+[the tool schema, live examples, verification, benchmarks and Windows MCP-only update instructions](docs/pattern_aggregation.md).
+
+For OpenStack request/instance tracing, field coverage, tested SELECT examples
+and the slow-boot demo scenario, see
+[OpenStack incident tracing](docs/openstack_incident_tracing.md). VM lifecycle
+correlation (UUID + request_id) is covered in
+[OpenStack VM tracing](docs/openstack_vm_tracing.md).
+
 After the database is ready, run the real read-only HTTP verifier:
 
 ```bash
 .venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp
+# After updating MCP with pattern aggregation support:
+.venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp --patterns
 ```
 
 Use [the Kiro example](examples/kiro/mcp.local.example.json) and
@@ -255,6 +276,21 @@ files. The HTTP test targets port 18000 unless `MCP_TEST_URL` is set. Preflight
 checks required projections, unique source IDs/mapping keys, null fields, actual
 `@@` execution, and index/table visibility counts, using SELECT only. Live tests
 also execute all aggregation modes, including `date_trunc` time buckets.
+
+To run the complete suite in Compose against the already-running jury database
+using the existing MCP image and current source:
+
+```bash
+./scripts/test-compose.sh
+# Optional pytest selection:
+./scripts/test-compose.sh tests/test_jury_setup.py
+```
+
+The test runner mounts source read-only and shell fixtures on a separate
+executable directory under ignored `artifacts/`. Plain pytest inside the MCP
+service uses its production `/tmp`, which has `noexec` and cannot run temporary
+shell scripts even with mode 0755. The runner enables the SELECT-only SQL and
+temporary HTTP tests; it does not restart deployed services.
 
 Legacy tests gated by `RUN_SERENEDB_INTEGRATION_TESTS` still require the separately
 loaded sample/staging schema. The ownership reload test additionally requires

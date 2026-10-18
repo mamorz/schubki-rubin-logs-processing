@@ -131,7 +131,7 @@ def test_mcp_optional_enum_description_and_mode_response(monkeypatch):
     async def run():
         async with Client(build_server(Settings(None))) as client:
             search = next(t for t in (await client.list_tools()).tools if t.name == "search_logs")
-            assert set(search.input_schema["required"]) == {"dataset", "query"}
+            assert set(search.input_schema["required"]) == {"dataset"}
             schema = search.input_schema["properties"]["match_mode"]
             assert schema["default"] == "any"
             assert set(schema["enum"]) == {"any", "phrase", "exact", "all"}
