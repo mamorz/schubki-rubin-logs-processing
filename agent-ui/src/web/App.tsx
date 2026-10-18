@@ -13,6 +13,7 @@ export function App() {
   const role = useChat((s) => s.role);
   const setRole = useChat((s) => s.setRole);
   const connection = useChat((s) => s.connection);
+  const turnCount = useChat((s) => s.turns.length);
   const ask = useChat((s) => s.ask);
   const notice = useChat((s) => s.notice);
   const dismissNotice = useChat((s) => s.dismissNotice);
@@ -64,7 +65,7 @@ export function App() {
       ) : (
         <main className="grid min-h-0 flex-1 grid-cols-1 lg:grid-cols-[minmax(0,1fr)_22rem]">
           <section className="flex min-h-0 flex-col">
-            <GemScroll className="min-h-0 flex-1" contentClassName="py-6 pl-4">
+            <GemScroll className="min-h-0 flex-1" contentClassName="py-6 pl-4" followKey={turnCount}>
               <div className="mx-auto max-w-3xl">
                 <ChatThread onAsk={onAsk} />
               </div>

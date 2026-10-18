@@ -1,6 +1,6 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { Brain, ChevronDown, ChevronRight, CircleStop, Coins, ListTree, SendHorizontal, Sparkles } from "lucide-react";
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useState, type KeyboardEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { ROLES, type AgentInfo, type RoleId } from "../../shared/events";
@@ -11,18 +11,10 @@ import { ToolCallCard } from "./ToolCallCard";
 export function ChatThread({ onAsk }: { onAsk: (question: string) => void }) {
   const turns = useChat((s) => s.turns);
   const role = useChat((s) => s.role);
-  const endRef = useRef<HTMLDivElement>(null);
-  const last = turns[turns.length - 1];
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ block: "end" });
-  }, [turns.length, last?.items.length, last?.text]);
-
   if (turns.length === 0) return <EmptyState role={role} onAsk={onAsk} />;
   return (
     <div className="space-y-8">
       {turns.map((turn) => <TurnView key={turn.id} turn={turn} />)}
-      <div ref={endRef} />
     </div>
   );
 }
@@ -130,9 +122,15 @@ const WORKFLOW_AUTO_FOLD_AFTER = 5;
 /** Timeline of the agent's reasoning and tool calls, in the order they happened. */
 function WorkflowLog({ items, autoFold, live }: { items: TurnItem[]; autoFold: boolean; live: boolean }) {
   const toolCalls = useChat((s) => s.toolCalls);
+  const focus = useChat((s) => s.focus);
   const [userOpen, setUserOpen] = useState<boolean | null>(null);
   const open = userOpen ?? !autoFold;
   const toolIds = items.flatMap((item) => (item.kind === "tool" ? [item.id] : []));
+
+  // A ledger link to one of our tool calls unfolds the log so the card can mount and reveal itself.
+  useEffect(() => {
+    if (focus && toolIds.includes(focus.id)) setUserOpen(true);
+  }, [focus]); // eslint-disable-line react-hooks/exhaustive-deps
   const running = toolIds.filter((id) => toolCalls[id]?.status !== "completed" && toolCalls[id]?.status !== "failed").length;
   return (
     <Collapsible.Root open={open} onOpenChange={setUserOpen}>

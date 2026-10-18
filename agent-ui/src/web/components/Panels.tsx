@@ -1,12 +1,12 @@
 import * as AlertDialog from "@radix-ui/react-alert-dialog";
 import * as Collapsible from "@radix-ui/react-collapsible";
-import { ChevronRight, Download, ExternalLink, FileSearch, FileText, Folder, KeyRound, Loader2, LogOut, Trash2 } from "lucide-react";
+import { ArrowUpRight, ChevronRight, Download, ExternalLink, FileSearch, FileText, Folder, KeyRound, Loader2, LogOut, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { ROLES, type RoleId, type StatusResponse, type ToolCallView } from "../../shared/events";
 import { api } from "../api";
 import { GemScroll, RubyGem } from "./GemScroll";
 import { describeResult } from "../../shared/toolResult";
-import { download, sessionToMarkdown } from "../exportMarkdown";
+import { download, reportFilename, turnToMarkdown } from "../exportMarkdown";
 import { useChat, type ConnectionState, type Turn } from "../store";
 import { TruncationBadge } from "./ToolCallCard";
 
@@ -63,29 +63,23 @@ export function EvidenceLedger({ onClear }: { onClear: () => void }) {
         <h2 className="text-sm font-semibold">Evidence ledger</h2>
         <span className="text-xs text-slate-500">{total} queries</span>
         <div className="ml-auto flex gap-1">
-          <button
-            type="button"
-            className="btn-ghost px-2 py-1 text-xs"
-            disabled={turns.length === 0}
-            onClick={() => download(`rubin-investigation-${new Date().toISOString().slice(0, 19)}.md`, sessionToMarkdown(turns, toolCalls))}
-            title="Export the session as a worked investigation (Markdown)"
-          >
-            <Download className="size-3.5" /> Export
-          </button>
           <ConfirmClear disabled={turns.length === 0} requests={turns.length} onConfirm={onClear} />
         </div>
       </div>
       {total === 0 && (
         <p className="panel p-4 text-xs text-slate-500">
-          Every database query the agent runs appears here with its filters, counts and truncation status. Export it to keep the evidence behind each answer.
+          Every database query the agent runs appears here with its filters, counts and truncation status. Click one to open it in the agent workflow, or export a request's full report.
         </p>
       )}
       <GemScroll className="min-h-0 flex-1" contentClassName="space-y-3" thumb={<FileThumb />} label="Scroll evidence ledger">
         {current && completedOf(current).length > 0 && (
           <section>
-            <h3 className="mb-1.5 truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500" title={current.question}>
-              Current request · {roleLabel(current.role)}
-            </h3>
+            <div className="mb-1.5 flex items-center gap-2">
+              <h3 className="min-w-0 flex-1 truncate text-[11px] font-semibold uppercase tracking-wide text-slate-500" title={current.question}>
+                Current request · {roleLabel(current.role)}
+              </h3>
+              <ExportReport turn={current} />
+            </div>
             <LedgerEntries calls={completedOf(current)} />
           </section>
         )}
@@ -148,14 +142,17 @@ function PreviousReport({ turn, calls }: { turn: Turn; calls: ToolCallView[] }) 
   const [open, setOpen] = useState(false);
   return (
     <Collapsible.Root open={open} onOpenChange={setOpen} className="panel overflow-hidden">
-      <Collapsible.Trigger className="flex w-full items-start gap-2 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60" title={turn.question}>
-        <ChevronRight className={`mt-0.5 size-3.5 shrink-0 text-slate-400 transition ${open ? "rotate-90" : ""}`} />
-        <Folder className="mt-0.5 size-3.5 shrink-0 text-ruby-600 dark:text-ruby-400" />
-        <span className="min-w-0 flex-1 text-xs">
-          <span className="line-clamp-2">Report for request “{turn.question}” for {roleLabel(turn.role)}</span>
-          <span className="text-[11px] text-slate-500">{calls.length} quer{calls.length === 1 ? "y" : "ies"}</span>
-        </span>
-      </Collapsible.Trigger>
+      <div className="flex items-start hover:bg-slate-50 dark:hover:bg-slate-800/60">
+        <Collapsible.Trigger className="flex min-w-0 flex-1 items-start gap-2 px-3 py-2 text-left" title={turn.question}>
+          <ChevronRight className={`mt-0.5 size-3.5 shrink-0 text-slate-400 transition ${open ? "rotate-90" : ""}`} />
+          <Folder className="mt-0.5 size-3.5 shrink-0 text-ruby-600 dark:text-ruby-400" />
+          <span className="min-w-0 flex-1 text-xs">
+            <span className="line-clamp-2">Report for request “{turn.question}” for {roleLabel(turn.role)}</span>
+            <span className="text-[11px] text-slate-500">{calls.length} quer{calls.length === 1 ? "y" : "ies"}</span>
+          </span>
+        </Collapsible.Trigger>
+        <div className="py-1.5 pr-1.5"><ExportReport turn={turn} /></div>
+      </div>
       <Collapsible.Content className="border-t border-slate-100 p-2 dark:border-slate-800">
         <LedgerEntries calls={calls} compact />
       </Collapsible.Content>
@@ -163,17 +160,43 @@ function PreviousReport({ turn, calls }: { turn: Turn; calls: ToolCallView[] }) 
   );
 }
 
+/** Downloads one request's full report (workflow, results, SQL, answer) as Markdown. */
+function ExportReport({ turn }: { turn: Turn }) {
+  const toolCalls = useChat((s) => s.toolCalls);
+  return (
+    <button
+      type="button"
+      onClick={() => download(reportFilename(turn), turnToMarkdown(turn, toolCalls))}
+      disabled={!turn.done}
+      className="btn-ghost shrink-0 px-1.5 py-1 text-[11px]"
+      title={turn.done ? "Export this request's full report (Markdown)" : "Available when the answer is finished"}
+    >
+      <Download className="size-3.5" /> Export
+    </button>
+  );
+}
+
 function LedgerEntries({ calls, compact = false }: { calls: ToolCallView[]; compact?: boolean }) {
+  const focusToolCall = useChat((s) => s.focusToolCall);
   return (
     <ol className="space-y-2">
       {calls.map((call, index) => {
         const model = describeResult(call.output);
         return (
-          <li key={call.id} className={compact ? "rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50" : "panel p-3"}>
+          <li key={call.id}>
+            <button
+              type="button"
+              onClick={() => focusToolCall(call.id)}
+              title="Show this call in the agent workflow"
+              className={`group block w-full text-left transition hover:ring-1 hover:ring-ruby-400/60 ${compact ? "rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50" : "panel p-3"}`}
+            >
             <div className="flex items-center gap-2">
               <span className="grid size-5 place-items-center rounded-full bg-slate-100 text-[11px] font-semibold dark:bg-slate-800">{index + 1}</span>
               <span className="font-mono text-xs font-medium">{call.tool}</span>
-              <span className="ml-auto"><TruncationBadge model={model} /></span>
+              <span className="ml-auto flex items-center gap-1.5">
+                <TruncationBadge model={model} />
+                <ArrowUpRight className="size-3.5 text-slate-400 transition group-hover:text-ruby-500" />
+              </span>
             </div>
             <p className="mt-1 text-xs text-slate-600 dark:text-slate-400">{model?.headline ?? "no structured result"}</p>
             {call.input && (
@@ -181,6 +204,7 @@ function LedgerEntries({ calls, compact = false }: { calls: ToolCallView[]; comp
                 {JSON.stringify(call.input)}
               </p>
             )}
+            </button>
           </li>
         );
       })}

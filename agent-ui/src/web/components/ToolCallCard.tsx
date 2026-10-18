@@ -1,16 +1,44 @@
 import * as Collapsible from "@radix-ui/react-collapsible";
 import { AlertTriangle, Check, ChevronRight, Copy, Info, Loader2, Wrench, X } from "lucide-react";
 import { Highlight, themes } from "prism-react-renderer";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { ToolCallView } from "../../shared/events";
+import { useChat } from "../store";
 import { describeResult, humanize, type BarsView, type ResultModel, type Row, type TableView } from "../../shared/toolResult";
+
+let handledFocus = 0;
 
 /** Renders any MCP tool call from the shape of its result; no per-tool code. */
 export function ToolCallCard({ call, defaultOpen = false }: { call: ToolCallView; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
+  const [flash, setFlash] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const focus = useChat((s) => s.focus);
   const model = call.status === "completed" ? describeResult(call.output) : null;
+
+  // Revealed from the evidence ledger: expand, bring into view and pulse once.
+  useEffect(() => {
+    if (!focus || focus.id !== call.id || focus.nonce === handledFocus) return;
+    handledFocus = focus.nonce; // a remounted card must not jump again for the same click
+    setOpen(true);
+    setFlash(true);
+    const frame = requestAnimationFrame(() => ref.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
+    const timer = window.setTimeout(() => setFlash(false), 1800);
+    return () => {
+      cancelAnimationFrame(frame);
+      window.clearTimeout(timer);
+      setFlash(false);
+    };
+  }, [focus, call.id]);
+
   return (
-    <Collapsible.Root open={open} onOpenChange={setOpen} className="panel overflow-hidden">
+    <Collapsible.Root
+      ref={ref}
+      id={`tool-${call.id}`}
+      open={open}
+      onOpenChange={setOpen}
+      className={`panel scroll-mt-4 overflow-hidden transition-shadow duration-500 ${flash ? "ring-2 ring-ruby-500 shadow-[0_0_18px_rgba(244,63,94,0.45)]" : ""}`}
+    >
       <Collapsible.Trigger className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-slate-50 dark:hover:bg-slate-800/60">
         <ChevronRight className={`size-4 shrink-0 text-slate-400 transition ${open ? "rotate-90" : ""}`} />
         <Wrench className="size-4 shrink-0 text-ruby-600 dark:text-ruby-400" />

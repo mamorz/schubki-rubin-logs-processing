@@ -35,6 +35,9 @@ interface ChatState {
   /** Kiro session per role, reopened after a page reload. */
   agentSessions: Partial<Record<RoleId, string>>;
   notice: string | null;
+  /** Tool call the ledger asked the chat to reveal; the nonce re-triggers repeated clicks. */
+  focus: { id: string; nonce: number } | null;
+  focusToolCall: (id: string | null) => void;
   setRole: (role: RoleId) => void;
   setConnection: (state: ConnectionState) => void;
   ask: (question: string) => void;
@@ -103,6 +106,8 @@ export const useChat = create<ChatState>()(
       toolCalls: {},
       agentSessions: {},
       notice: null,
+      focus: null,
+      focusToolCall: (id) => set({ focus: id ? { id, nonce: Date.now() } : null }),
       setRole: (role) => set({ role }),
       setConnection: (connection) => set({ connection }),
       dismissNotice: () => set({ notice: null }),

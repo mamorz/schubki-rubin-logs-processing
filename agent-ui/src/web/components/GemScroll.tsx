@@ -1,21 +1,34 @@
+import { ArrowDown } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from "react";
 
 const THUMB = 22;
 
 /** Scroll area with a dark track and a draggable gem as the thumb (any icon can be passed as `thumb`). */
-export function GemScroll({ children, className = "", contentClassName = "", thumb = <RubyGem />, label = "Scroll conversation" }: {
+export function GemScroll({
+  children,
+  className = "",
+  contentClassName = "",
+  thumb = <RubyGem />,
+  label = "Scroll conversation",
+  followKey,
+}: {
   children: ReactNode;
   className?: string;
   contentClassName?: string;
   thumb?: ReactNode;
   label?: string;
+  /** When set, new content keeps the view pinned to the bottom only while the user is already there;
+   * changing the key (e.g. a new question) jumps back down. */
+  followKey?: string | number;
 }) {
   const id = useId();
   const viewport = useRef<HTMLDivElement>(null);
   const content = useRef<HTMLDivElement>(null);
   const track = useRef<HTMLDivElement>(null);
   const grab = useRef<number | null>(null);
-  const [state, setState] = useState({ top: 0, percent: 0, scrollable: false, dragging: false });
+  const atBottom = useRef(true);
+  const following = followKey !== undefined;
+  const [state, setState] = useState({ top: 0, percent: 0, scrollable: false, dragging: false, atBottom: true });
 
   const measure = useCallback(() => {
     const v = viewport.current;
@@ -24,22 +37,45 @@ export function GemScroll({ children, className = "", contentClassName = "", thu
     const max = v.scrollHeight - v.clientHeight;
     const range = Math.max(0, t.clientHeight - THUMB);
     const ratio = max > 0 ? v.scrollTop / max : 0;
-    setState((s) => ({ ...s, top: ratio * range, percent: Math.round(ratio * 100), scrollable: max > 4 }));
+    setState((s) => ({ ...s, top: ratio * range, percent: Math.round(ratio * 100), scrollable: max > 4, atBottom: atBottom.current }));
   }, []);
+
+  const onScroll = useCallback(() => {
+    const v = viewport.current;
+    if (v) atBottom.current = v.scrollHeight - v.scrollTop - v.clientHeight < 48;
+    measure();
+  }, [measure]);
+
+  const scrollToBottom = useCallback((smooth = false) => {
+    const v = viewport.current;
+    if (!v) return;
+    atBottom.current = true;
+    v.scrollTo({ top: v.scrollHeight, behavior: smooth ? "smooth" : "auto" });
+  }, []);
+
+  // Content grew (streaming answer, new tool call): follow only if the reader was at the bottom.
+  const onResize = useCallback(() => {
+    if (following && atBottom.current) scrollToBottom();
+    measure();
+  }, [following, measure, scrollToBottom]);
+
+  useEffect(() => {
+    if (following) scrollToBottom();
+  }, [followKey, following, scrollToBottom]);
 
   useEffect(() => {
     const v = viewport.current;
     if (!v) return;
-    v.addEventListener("scroll", measure, { passive: true });
-    const observer = new ResizeObserver(measure);
+    v.addEventListener("scroll", onScroll, { passive: true });
+    const observer = new ResizeObserver(onResize);
     observer.observe(v);
     if (content.current) observer.observe(content.current);
     measure();
     return () => {
-      v.removeEventListener("scroll", measure);
+      v.removeEventListener("scroll", onScroll);
       observer.disconnect();
     };
-  }, [measure]);
+  }, [measure, onScroll, onResize]);
 
   const scrollToRatio = (ratio: number, smooth = false) => {
     const v = viewport.current;
@@ -94,6 +130,16 @@ export function GemScroll({ children, className = "", contentClassName = "", thu
       >
         <div ref={content} className={contentClassName}>{children}</div>
       </div>
+
+      {following && state.scrollable && !state.atBottom && (
+        <button
+          type="button"
+          onClick={() => scrollToBottom(true)}
+          className="absolute bottom-3 left-1/2 z-10 flex -translate-x-1/2 items-center gap-1.5 rounded-full bg-slate-950 px-3 py-1.5 text-xs font-medium text-ruby-100 shadow-lg ring-1 ring-ruby-500/40 transition hover:ring-ruby-400"
+        >
+          <ArrowDown className="size-3.5 text-ruby-400" /> Latest
+        </button>
+      )}
 
       <div
         className={`absolute top-3 right-2 bottom-3 w-[22px] transition-opacity duration-300 ${state.scrollable ? "opacity-100" : "pointer-events-none opacity-0"}`}
