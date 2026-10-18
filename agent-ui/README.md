@@ -78,20 +78,23 @@ browser ──WS /api/session──▶ Fastify (src/server) ──stdio ACP─�
 
 Agents are looked up by name: `engineer`, `team-lead`, `manager`.
 
-- **Workspace agents (preferred):** put them in the repository's `.kiro/agents/`
-  (`engineer.json`, `team-lead.json`, `manager.json`, with prompts referenced as
-  `"prompt": "file://./prompts/<role>.md"`). The directory is mounted read-only at
-  `/workspace/.kiro/agents`, which is the agent's working directory, so Kiro prefers these over the
-  bundled ones. The role tab tooltip and `/api/status` show which source is active.
-- **Fallback agents:** `agent-ui/fallback-agents/` is copied to `~/.kiro/agents` on every
-  container start.
+- **Workspace agents (in use):** the RUBIN v1.5 role agents live in the repository's
+  `.kiro/agents/` (`engineer.json`, `team-lead.json`, `manager.json`). Prompts are **inline**:
+  Kiro CLI 2.32.0 does not resolve relative `file://` prompt paths. `.kiro/agents/prompts/` holds
+  their sources (`_shared_core.md` + `_role_<role>.md`, assembled into `<role>.md`) and is not
+  read by Kiro. Re-inline a prompt after editing its source. The directory is mounted read-only
+  at `/workspace/.kiro/agents`, which is the agent's working directory, so Kiro prefers these
+  over the bundled ones. The role dropdown tooltip and `/api/status` show which source is active.
+- **Fallback agents:** `agent-ui/fallback-agents/` (short inline prompts) is copied to
+  `~/.kiro/agents` on every container start and is used only for a role with no workspace file.
 - **Don't hardcode the MCP URL in agent files.** Use `"includeMcpJson": true` and the
   server name `rubin-log-insights`. The container writes its own `~/.kiro/settings/mcp.json`
   pointing at `http://mcp-server:8000/mcp`, while a developer's local
   `.kiro/settings/mcp.json` points at `http://127.0.0.1:18000/mcp`
   (`examples/kiro/mcp.local.example.json`).
-- Restrict tools: `"tools": ["@rubin-log-insights"]`, `"allowedTools": ["@rubin-log-insights"]`.
-  The UI rejects any other permission request anyway.
+- Restrict tools to the rubin server, either all of it (`"@rubin-log-insights"`) or per tool
+  (`"@rubin-log-insights/search_logs"`, …, as the role agents do). The UI rejects any other
+  permission request anyway.
 
 Kiro CLI 2.32.0 is pinned (SHA-256 checked in the Dockerfile), and it uses the default v2
 agent engine, which reads the JSON format above.

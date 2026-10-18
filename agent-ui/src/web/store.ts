@@ -189,6 +189,13 @@ export const useChat = create<ChatState>()(
     {
       name: "rubin-agent-ui:chat:v1",
       storage: createJSONStorage(() => safeLocalStorage),
+      // v2: the role agents changed (RUBIN v1.5). Keep the visible history, but drop saved Kiro
+      // sessions so every role starts a fresh session with the new agent definition.
+      version: 2,
+      migrate: (persisted, version) => {
+        const state = (persisted ?? {}) as Partial<ChatState>;
+        return version < 2 ? { ...state, agentSessions: {} } : state;
+      },
       partialize: (state) => {
         const turns = state.turns.slice(-MAX_SAVED_TURNS);
         const keep = new Set(turns.flatMap((t) => t.toolCallIds));
