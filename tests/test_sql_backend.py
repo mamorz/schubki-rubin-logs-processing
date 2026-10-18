@@ -270,3 +270,18 @@ def test_exact_search_uses_literal_raw_equality(sql_fixture, dataset, text):
         missing = service.search_logs(dataset=dataset, text=altered, match_mode="exact")
         assert missing.total_corpus_match_count == 0
         assert missing.rows == [] and not missing.truncated
+
+
+@pytest.mark.parametrize("dataset,query,total,unmapped", [
+    ("bgl", "core", 2, 1), ("openstack", "instance", 3, 1),
+])
+def test_pattern_team_summary_keeps_unmapped_records_and_source_identities(sql_fixture, dataset, query, total, unmapped):
+    _, factory = sql_fixture
+    result = QueryService(factory, SQL_DATASET_SPECS).summarize_logs(
+        dataset=dataset, group_by="team", query=query, limit=100,
+    )
+    assert result.total_matching_record_count == total
+    assert sum(g["record_count"] for g in result.groups) == total
+    assert next(g["record_count"] for g in result.groups if g["team"] == "UNMAPPED") == unmapped
+    assert result.mapping_coverage["unmapped_record_count"] == unmapped
+    assert result.ownership_provenance["fictional"] is True

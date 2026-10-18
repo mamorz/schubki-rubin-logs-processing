@@ -214,10 +214,19 @@ it is not raw string equality. All modes retain filters, complete filtered count
 limits, SQL/parameter provenance, and truncation reporting. See
 [search mode semantics, verification, and timings](docs/search_match_modes.md).
 
+`summarize_logs` accepts the same optional `query` and `match_mode` for pattern
+counts, component rankings, fictional team attribution and time trends over all
+matching records. Omitting `query` preserves the existing behavior. Time buckets
+also support `week` and `month`; optional `sort_direction='desc'` shows newest
+periods first. Totals remain independent of the returned-group limit. See
+[the tool schema, live examples, verification, benchmarks and Windows MCP-only update instructions](docs/pattern_aggregation.md).
+
 After the database is ready, run the real read-only HTTP verifier:
 
 ```bash
 .venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp
+# After updating MCP with pattern aggregation support:
+.venv/bin/python -m scripts.verify_mcp_http --url http://127.0.0.1:18000/mcp --patterns
 ```
 
 Use [the Kiro example](examples/kiro/mcp.local.example.json) and

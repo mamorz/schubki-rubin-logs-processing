@@ -212,7 +212,7 @@ def test_mapping_coverage_reports_records_components_and_empty_scope() -> None:
     )["mapped_record_percentage"] == 0.0
 
 
-@pytest.mark.parametrize("interval", ["hour", "day"])
+@pytest.mark.parametrize("interval", ["hour", "day", "week", "month"])
 def test_builds_allowlisted_time_bucket_aggregation(interval: str) -> None:
     plan = build_aggregation_query_plan(
         dataset="bgl", group_by="time", interval=interval, limit=2
@@ -245,7 +245,7 @@ def test_rejects_interval_for_non_time_grouping() -> None:
 def test_rejects_unapproved_time_interval() -> None:
     with pytest.raises(ValueError, match="interval must be one of"):
         build_aggregation_query_plan(
-            dataset="bgl", group_by="time", interval="week"
+            dataset="bgl", group_by="time", interval="quarter"
         )
 
 

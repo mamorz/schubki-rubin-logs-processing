@@ -100,14 +100,29 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         component: str | None = None,
         severity: str | None = None,
         limit: int = DEFAULT_SUMMARY_LIMIT,
+        query: str | None = None,
+        match_mode: Literal["any", "phrase", "exact", "all"] = "any",
+        sort_direction: Literal["asc", "desc"] = "asc",
     ) -> dict[str, Any]:
         """Count logs by component, fictional owner team, severity, event_id, or time.
 
         Use group_by='team' for a LEFT JOIN to the configured fictional ownership map;
         unmatched components remain visible as UNMAPPED. Use group_by='time' with
-        interval='hour' or 'day'. Counts cover the complete filtered configured
+        interval='hour', 'day', 'week' (Monday start), or 'month' (calendar start).
+        Time buckets default to ascending order (earliest first); use
+        sort_direction='desc' for newest first. A truncated time series omits
+        periods beyond limit; narrow the time range or increase limit to see more.
+        Counts cover the complete filtered configured
         corpus; limit only bounds returned groups. Timestamps are naive ISO 8601
         values with inclusive start and exclusive end.
+
+        Optional query searches messages with the same semantics as search_logs:
+        any (default) matches any token; all requires every token in any order;
+        phrase matches consecutive tokens in order using index normalization;
+        exact compares the ENTIRE stored raw message, including case, punctuation,
+        and whitespace. Omit query to aggregate all filtered logs. Empty query is
+        valid only for exact. Totals and fictional ownership coverage use every
+        matching record, independently of limit; truncated flags omitted groups.
         """
 
         try:
@@ -120,6 +135,9 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
                 component=component,
                 severity=severity,
                 limit=limit,
+                query=query,
+                match_mode=match_mode,
+                sort_direction=sort_direction,
             )
         except ValueError as error:
             raise ToolError(str(error)) from error
