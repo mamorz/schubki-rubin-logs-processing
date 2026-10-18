@@ -4,8 +4,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, datetime
-from typing import Any, Literal, Mapping
+from functools import wraps
+import logging
+from typing import Any, Callable, Literal, Mapping, ParamSpec, TypeVar
 
+import psycopg
 from mcp.server import MCPServer
 from mcp.server.mcpserver.exceptions import ToolError
 from pydantic import StrictBool, StrictFloat, StrictInt
@@ -19,6 +22,40 @@ from .queries import (
     QueryResult,
     QueryService,
 )
+
+logger = logging.getLogger(__name__)
+_P = ParamSpec("_P")
+_R = TypeVar("_R")
+
+
+def _database_errors(function: Callable[_P, _R]) -> Callable[_P, _R]:
+    """Expose safe expected failures while retaining diagnostics in server logs."""
+
+    @wraps(function)
+    def wrapped(*args: _P.args, **kwargs: _P.kwargs) -> _R:
+        try:
+            return function(*args, **kwargs)
+        except psycopg.Error as error:
+            if isinstance(error, psycopg.errors.QueryCanceled):
+                message = "SQL execution timed out or was cancelled. Narrow the filters or time range and retry."
+                category = "timeout"
+            elif isinstance(error, psycopg.InterfaceError) or (
+                isinstance(error, psycopg.OperationalError) and (
+                    error.sqlstate is None
+                    or error.sqlstate.startswith(("08", "28"))
+                    or error.sqlstate in {"57P01", "57P02", "57P03", "53300"}
+                )
+            ):
+                message = "Database connection unavailable. Check that SereneDB is running and reachable, then retry."
+                category = "connection"
+            else:
+                message = "Database query failed. Retry; if it persists, ask the operator to check the server logs."
+                category = "execution"
+            logger.warning("Database failure in %s (%s, SQLSTATE=%s)",
+                           function.__name__, category, error.sqlstate, exc_info=True)
+            raise ToolError(message) from error
+
+    return wrapped
 
 
 @dataclass(frozen=True)
@@ -42,6 +79,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
     """Register health, search, aggregation, and chronological-context tools."""
 
     @server.tool()
+    @_database_errors
     def health_check() -> dict[str, str]:
         """Confirm that the MCP server is running without querying SereneDB."""
 
@@ -52,6 +90,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         }
 
     @server.tool()
+    @_database_errors
     def search_logs(
         dataset: str,
         query: str | None = None,
@@ -112,6 +151,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         return _serialize_query_result(result)
 
     @server.tool()
+    @_database_errors
     def summarize_logs(
         dataset: str,
         group_by: str,
@@ -165,6 +205,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
         return _serialize_aggregation_result(result)
 
     @server.tool()
+    @_database_errors
     def analyze_vm_spawn_performance(
         dataset: Literal["openstack"] = "openstack",
         start_time: str | None = None, end_time: str | None = None,
@@ -210,6 +251,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
             raise ToolError(str(error)) from error
 
     @server.tool()
+    @_database_errors
     def detect_log_spikes(
         dataset: Literal["bgl"] = "bgl",
         start_time: str | None = None, end_time: str | None = None,
@@ -264,6 +306,7 @@ def register_tools(server: MCPServer, queries: QueryService) -> None:
             raise ToolError(str(error)) from error
 
     @server.tool()
+    @_database_errors
     def get_nearby_events(
         dataset: str,
         record_id: int,

@@ -200,6 +200,27 @@ versioned `loghub_*` tables are not used by the jury SQL backend. The original
 `MCP_DATASET_BACKEND=sample`; see [sample backend setup](docs/sample_backend.md).
 Do not mix these loaders into the jury database.
 
+MCP query sessions enforce a **15-second deadline per SQL statement**. Override
+`MCP_SQL_TIMEOUT_SECONDS` (0.001..3600 seconds) in the process environment, or in
+`.env` for direct Python startup. Compose accepts this environment variable too.
+SereneDB 26.09.1.3 enforces `SET SESSION max_execution_time` in milliseconds;
+its PostgreSQL-compatible `statement_timeout` is accepted but is not enforced.
+The MCP connection factory sets and checks the session value before queries run.
+It never changes global settings; direct bulk-loader connections are unaffected.
+Health checks perform no SQL and retain their existing responses.
+
+The deadline is per statement, so tools with multiple SQL statements can take
+longer overall. Native deadlines do not interrupt every blocking function in this
+version (for example, `pg_sleep`). The MCP connection also bounds driver waits,
+sends a PostgreSQL wire cancellation at expiry, and discards the session after
+bounded cancellation cleanup (up to one second to send and one second to drain).
+This uses the pinned psycopg 3.3.6 `Connection.wait` timeout mechanism, including
+its `_WaitTimeout` exception. Keep the MCP client's request timeout above the expected
+whole-tool duration. Connections and cursors are closed after execution failures;
+subsequent requests open fresh sessions. MCP errors distinguish an unavailable
+connection, an execution timeout/cancellation, and other SQL failures, without
+returning database exception details. Server logs retain diagnostic tracebacks.
+
 ## MCP tools and Kiro
 
 The six tools are `health_check`, `search_logs`, `summarize_logs` (including
