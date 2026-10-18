@@ -236,13 +236,30 @@ Both corpora are fully covered: every component in the loaded data has an owner 
 coverage in the verification run). The teams and areas are deliberately plausible, but they are
 **not an authoritative organisational fact**.
 
-### 3.2 Scenario
+### 3.2 Scenario: the BGL "rts panic" kernel failure
 
-<!-- WORKED-INVESTIGATION: filled in from real agent runs through the RUBIN agent UI. -->
+We followed one real, recurring problem through all three roles in the agent UI: the BGL `KERNEL`
+FATAL message `rts panic! - stopping execution`, compared with OpenStack problems for
+prioritisation. Each role started a fresh session and chose its own tools. We re-ran the key tool
+calls to check every number. **The full write-up — questions, every tool call, executed SQL with
+parameters, results, answers, two corrections and the saved MCP responses — is in
+[docs/worked_investigation.md](docs/worked_investigation.md).**
 
-_To be completed from a real agent session: the questions per role, the tool calls, executed
-queries and results, each role's answer and recommended action, and what the data does and does
-not establish._
+| Role | Question (abridged) | Evidence the agent gathered | Answer and recommended action |
+|---|---|---|---|
+| **Engineer** | Find "rts panic", take the earliest occurrence, show what happened around it, give a cause and next check | `search_logs` (phrase): **3,983** matches; earliest record 33937, 2005-06-05, `KERNEL`/`FATAL`. `get_nearby_events`: register dump in the 1.6 s before, corrected DDR/L3 EDRAM memory errors 2.7–3.3 s after | Kernel runtime panic after a register dump. Two hypotheses, memory degradation vs. crash-recovery artefact; timing alone confirms neither. **Next:** map `lr:003625f0` to the kernel source, look for memory errors *before* the panic, compare with other panics |
+| **Team lead** | How often does it recur, weekly trend, components and owning teams, what to investigate first | 4× `summarize_logs` over the whole corpus: 3,983 records in all 32 weeks, all `KERNEL`/`FATAL`, all owned by the fictional **Compute Kernel** team; **56 %** in the week of 2005-06-13. Samples and nearby events from the peak week | Recurring but highly concentrated; the low tail is not proof of a fix. **Order:** (1) peak week with spike detection and several traces, (2) secondary clusters, (3) the tail |
+| **Manager** | Which problems deserve attention first across BGL and OpenStack, without inventing impact | Daily trend (2,049 records on 2005-06-14), FATAL per team (Compute Kernel 626,756 of 855,501), OpenStack ERROR per team (Virtualization 192 of 194), spawn analytics (5 of 2,066 slow), `detect_log_spikes` (2005-06-14 09:00–12:00: 344,064 records, 22,528 nodes) | **(1)** the 2005-06-14 `KERNEL` cascade, of which "rts panic" is a small part; **(2)** OpenStack `qemu-img` disk errors (Virtualization); **(3)** the 5 slow VM launches. Impact marked unverified for each, one next action per priority |
+
+**What the data establishes:**
+- The pattern's exact size (3,983 identical `KERNEL`/`FATAL` records), its timing and
+  concentration, the owning team, and its place inside the largest returned spike window.
+- The OpenStack comparison figures.
+
+**What it does not establish:** the root cause, the number of real incidents or affected nodes
+behind the records, whether the problem was fixed, any business impact, or a link between the two
+systems. The full document lists two places where the Manager's summary of sampled or truncated
+results was imprecise and gives the correct figures.
 
 ---
 

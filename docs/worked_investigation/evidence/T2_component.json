@@ -1,0 +1,11 @@
+{
+ "tool": "summarize_logs",
+ "arguments": {
+  "dataset": "bgl",
+  "query": "rts panic",
+  "match_mode": "phrase",
+  "group_by": "component"
+ },
+ "is_error": false,
+ "text": "{\n  \"dataset\": \"bgl\",\n  \"aggregation_type\": \"grouped_count\",\n  \"group_by\": \"component\",\n  \"interval\": null,\n  \"applied_filters\": {\n    \"start_time\": null,\n    \"end_time\": null,\n    \"component\": null,\n    \"severity\": null,\n    \"timestamp_bounds\": \"start inclusive, end exclusive\",\n    \"group_limit\": 20,\n    \"full_text_query\": \"rts panic\",\n    \"match_mode\": \"phrase\"\n  },\n  \"groups\": [\n    {\n      \"component\": \"KERNEL\",\n      \"record_count\": 3983\n    }\n  ],\n  \"returned_group_count\": 1,\n  \"total_matching_record_count\": 3983,\n  \"group_limit\": 20,\n  \"truncated\": false,\n  \"scope\": {\n    \"source\": \"SQL-managed bgl corpus; counts reflect currently loaded rows\",\n    \"table\": \"bgl_logs\",\n    \"complete_filtered_scope_aggregated\": true,\n    \"count_unit\": \"log records, not distinct incidents\",\n    \"development_sample\": false\n  },\n  \"provenance\": {\n    \"executed_sql\": {\n      \"aggregation\": \"SELECT\\n    component,\\n    COUNT(*) AS record_count\\nFROM bgl_logs\\nWHERE line_no IN (SELECT line_no FROM bgl_logs_idx WHERE message @@ ts_phrase(%(text)s))\\nGROUP BY component\\nORDER BY record_count DESC, component\\nLIMIT %(fetch_limit)s\",\n      \"total_count\": \"SELECT COUNT(*) AS total_matching_record_count\\nFROM bgl_logs\\nWHERE line_no IN (SELECT line_no FROM bgl_logs_idx WHERE message @@ ts_phrase(%(text)s))\"\n    },\n    \"parameters\": {\n      \"aggregation\": {\n        \"text\": \"rts panic\",\n        \"fetch_limit\": 21\n      },\n      \"total_count\": {\n        \"text\": \"rts panic\"\n      }\n    }\n  }\n}"
+}
