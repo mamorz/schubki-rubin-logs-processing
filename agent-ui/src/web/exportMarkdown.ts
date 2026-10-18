@@ -1,4 +1,5 @@
 import { ROLES, type ToolCallView } from "../shared/events";
+import { stripToolMarkup } from "../shared/agentText";
 import { describeResult, humanize, type Row } from "../shared/toolResult";
 import type { Turn } from "./store";
 
@@ -61,7 +62,7 @@ export function turnToMarkdown(turn: Turn, toolCalls: Record<string, ToolCallVie
     "",
   ];
   // The last text segment is the answer; earlier ones are interim notes inside the workflow.
-  const answer = [...turn.items].reverse().find((i) => i.kind === "text");
+  const answer = [...turn.items].reverse().find((i) => i.kind === "text" && stripToolMarkup(i.text).trim());
   let toolIndex = 0;
   for (const item of turn.items) {
     if (item.kind === "thought" && item.text.trim()) {
@@ -69,11 +70,11 @@ export function turnToMarkdown(turn: Turn, toolCalls: Record<string, ToolCallVie
     } else if (item.kind === "tool") {
       const call = toolCalls[item.id];
       if (call) lines.push(...toolSection(call, ++toolIndex));
-    } else if (item.kind === "text" && item.text.trim() && item !== answer) {
-      lines.push(item.text.trim(), "");
+    } else if (item.kind === "text" && stripToolMarkup(item.text).trim() && item !== answer) {
+      lines.push(stripToolMarkup(item.text).trim(), "");
     }
   }
-  lines.push("## Answer", "", answer?.kind === "text" ? answer.text.trim() : "_(no answer)_", "");
+  lines.push("## Answer", "", answer?.kind === "text" ? stripToolMarkup(answer.text).trim() : "_(no answer)_", "");
   if (turn.error) lines.push(`> **Error:** ${turn.error}`, "");
   lines.push("---", "_Counts are log records, not incidents. Team ownership is a fictional mapping._", "");
   return lines.join("\n");

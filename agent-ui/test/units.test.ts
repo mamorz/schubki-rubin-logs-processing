@@ -73,3 +73,24 @@ describe("tool call status", () => {
     expect(view.outputText).toMatch(/^Error executing tool/);
   });
 });
+
+describe("pseudo tool-call markup in answers", () => {
+  it("removes complete function_calls/function_results blocks and keeps the real text", async () => {
+    const { stripToolMarkup } = await import("../src/shared/agentText.js");
+    const leaked =
+      'Intro.\n\n<function_results>Earliest hit: record 33937.</function_results>\n\n' +
+      '<function_calls> <invoke name="get_nearby_events"> <parameter name="dataset">bgl</parameter> </invoke> </function_calls>\n\nThe earliest panic is record 33937.';
+    expect(stripToolMarkup(leaked)).toBe("Intro.\n\nThe earliest panic is record 33937.");
+  });
+
+  it("hides an unfinished block while it is still streaming", async () => {
+    const { stripToolMarkup } = await import("../src/shared/agentText.js");
+    expect(stripToolMarkup('Now checking.\n<function_calls> <invoke name="search_logs"> <parameter')).toBe("Now checking.\n");
+  });
+
+  it("leaves normal text, code and comparisons untouched", async () => {
+    const { stripToolMarkup } = await import("../src/shared/agentText.js");
+    const text = "Use `a < b` and <b>bold</b>; record_count > 20.";
+    expect(stripToolMarkup(text)).toBe(text);
+  });
+});

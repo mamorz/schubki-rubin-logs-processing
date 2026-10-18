@@ -3,6 +3,7 @@ import { Brain, ChevronDown, ChevronRight, CircleStop, Coins, ListTree, SendHori
 import { useEffect, useState, type KeyboardEvent } from "react";
 import Markdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { stripToolMarkup } from "../../shared/agentText";
 import { ROLES, type AgentInfo, type RoleId } from "../../shared/events";
 import { SUGGESTED_QUESTIONS } from "../questions";
 import { useChat, type Turn, type TurnItem } from "../store";
@@ -50,7 +51,8 @@ function segment(items: TurnItem[]): Segment[] {
   const segments: Segment[] = [];
   items.forEach((item, index) => {
     if (item.kind === "text") {
-      if (item.text.trim()) segments.push({ kind: "text", text: item.text, key: index });
+      const text = stripToolMarkup(item.text);
+      if (text.trim()) segments.push({ kind: "text", text, key: index });
       return;
     }
     const last = segments[segments.length - 1];
@@ -137,7 +139,9 @@ function WorkflowLog({ items, autoFold, live }: { items: TurnItem[]; autoFold: b
       <Collapsible.Trigger className="flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
         <ChevronRight className={`size-3 transition ${open ? "rotate-90" : ""}`} />
         <ListTree className="size-3" />
-        {live ? "Working" : "Agent workflow"} · {toolIds.length} tool call{toolIds.length === 1 ? "" : "s"}
+        {toolIds.length === 0
+          ? live ? "Thinking" : "Reasoning"
+          : `${live ? "Working" : "Agent workflow"} · ${toolIds.length} tool call${toolIds.length === 1 ? "" : "s"}`}
         {running > 0 && <span className="text-amber-600">· {running} running</span>}
       </Collapsible.Trigger>
       <Collapsible.Content>
