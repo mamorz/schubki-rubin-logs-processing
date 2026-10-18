@@ -243,7 +243,7 @@ FATAL message `rts panic! - stopping execution`, compared with OpenStack problem
 prioritisation. Each role started a fresh session and chose its own tools. We re-ran the key tool
 calls to check every number. **The full write-up — questions, every tool call, executed SQL with
 parameters, results, answers, two corrections and the saved MCP responses — is in
-[docs/worked_investigation.md](docs/worked_investigation.md).**
+[docs/worked_investigation/worked_investigation.md](docs/worked_investigation/worked_investigation.md).**
 
 | Role | Question (abridged) | Evidence the agent gathered | Answer and recommended action |
 |---|---|---|---|
