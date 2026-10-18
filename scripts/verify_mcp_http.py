@@ -19,7 +19,7 @@ EXPECTED_TOOLS = {
 REQUIRED_INPUTS = {
     "get_nearby_events": {"dataset", "record_id"},
     "health_check": set(),
-    "search_logs": {"dataset", "query"},
+    "search_logs": {"dataset"},
     "summarize_logs": {"dataset", "group_by"},
 }
 
@@ -99,7 +99,48 @@ async def verify_pattern_aggregations(client: Client) -> dict[str, Any]:
     return {"totals": totals, "timestamp_regression_count": 92}
 
 
-async def verify_endpoint(url: str, *, mode: str = "auto", patterns: bool = False) -> dict[str, Any]:
+async def verify_openstack_tracing(client: Client) -> dict[str, Any]:
+    """Verify literal tracing and metadata on the existing full SQL corpus."""
+    request_id = "req-d6143bd4-9784-4e95-a0c8-83fba00530b6"
+    instance_id = "544fd51c-4edc-4780-baae-ba1d80a0acfc"
+    tool = next(t for t in (await client.list_tools()).tools if t.name == "search_logs")
+    assert set(tool.input_schema["required"]) == {"dataset"}
+    for field in ("query", "request_id", "instance_id"):
+        assert tool.input_schema["properties"][field]["default"] is None
+    async def search(**args):
+        response = await client.call_tool("search_logs", dict(dataset="openstack", **args))
+        assert not response.is_error
+        data = response.structured_content
+        assert "LIMIT" not in data["provenance"]["executed_sql"]["total_count"]
+        for row in data["records"]:
+            assert {"request_id", "instance_id", "service", "http_status", "latency_s", "is_anomaly"} <= row.keys()
+        return data
+    request = await search(request_id=request_id, limit=50)
+    assert request["total_corpus_match_count"] == request["returned_record_count"] == 12
+    assert request["truncated"] is False
+    api = next(r for r in request["records"] if r["service"] == "nova-api")
+    assert api["instance_id"] is None and api["is_anomaly"] is False
+    assert api["http_status"] == 202 and round(api["latency_s"], 3) == 0.479
+    instance = await search(instance_id=instance_id, limit=2)
+    assert instance["total_corpus_match_count"] == 25 and instance["returned_record_count"] == 2
+    assert instance["truncated"] is True
+    assert all(r["instance_id"] == instance_id and r["latency_s"] is None for r in instance["records"])
+    spawn = await search(request_id=request_id, instance_id=instance_id, query="41.81 seconds to spawn",
+                         match_mode="phrase", start_time="2017-05-14T21:07:00", end_time="2017-05-14T21:09:00",
+                         component="nova.compute.manager", severity="INFO", limit=50)
+    assert spawn["total_corpus_match_count"] == 1 and not spawn["truncated"]
+    assert "41.81" in spawn["records"][0]["message"]
+    mentions = await search(query=instance_id, match_mode="phrase", limit=50)
+    assert mentions["total_corpus_match_count"] == 28 and not mentions["truncated"]
+    assert sum(r["service"] == "nova-api" for r in mentions["records"]) == 3
+    empty = await search(instance_id="missing' OR 1=1 --", limit=1)
+    assert empty["total_corpus_match_count"] == 0 and empty["records"] == [] and not empty["truncated"]
+    for args in ({"dataset": "bgl", "request_id": request_id}, {"dataset": "openstack"}):
+        assert (await client.call_tool("search_logs", args)).is_error
+    return dict(request_count=12, instance_count=25, message_mention_count=28, spawn_count=1)
+
+
+async def verify_endpoint(url: str, *, mode: str = "auto", patterns: bool = False, tracing: bool = False) -> dict[str, Any]:
     """Verify initialization, schemas, read-only tools, and error handling."""
 
     async with Client(url, read_timeout_seconds=30, mode=mode) as client:
@@ -241,6 +282,8 @@ async def verify_endpoint(url: str, *, mode: str = "auto", patterns: bool = Fals
         }
         if patterns:
             report["pattern_aggregation"] = await verify_pattern_aggregations(client)
+        if tracing:
+            report["openstack_tracing"] = await verify_openstack_tracing(client)
         return report
 
 
@@ -253,13 +296,14 @@ def _parse_args() -> argparse.Namespace:
         default=os.getenv("MCP_TEST_URL", "http://127.0.0.1:18000/mcp"),
     )
     parser.add_argument("--patterns", action="store_true", help="Also verify pattern aggregation on the full SQL corpora")
+    parser.add_argument("--tracing", action="store_true", help="Also verify OpenStack structured tracing on the full SQL corpus")
     return parser.parse_args()
 
 
 def main() -> None:
     args = _parse_args()
     async def run():
-        return await verify_endpoint(args.url, patterns=args.patterns)
+        return await verify_endpoint(args.url, patterns=args.patterns, tracing=args.tracing)
     print(json.dumps(anyio.run(run), indent=2, default=str))
 
 

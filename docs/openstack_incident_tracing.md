@@ -1,5 +1,12 @@
 # OpenStack incident tracing with the existing schema
 
+Implementation update: structured `request_id`/`instance_id` equality filters and
+OpenStack search metadata are now implemented. See
+[the current MCP contract, reproduced scenario and Compose verification](openstack_tracing_mcp.md).
+Sections 4–5 below retain the original pre-change investigation/proposal; the
+implemented instance filter is strict column equality, without the proposed
+implicit `strpos` expansion. Explicit UUID phrase search remains available.
+
 This note covers which incident-tracing questions the loaded `openstack_logs` data
 can answer, without schema changes, new indexes or reloads. Every number here
 comes from a SELECT that was actually run against the local SereneDB

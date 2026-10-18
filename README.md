@@ -214,6 +214,12 @@ it is not raw string equality. All modes retain filters, complete filtered count
 limits, SQL/parameter provenance, and truncation reporting. See
 [search mode semantics, verification, and timings](docs/search_match_modes.md).
 
+For SQL-backed OpenStack, `search_logs` also accepts literal `request_id` and
+`instance_id` filters, permits omitting `query` when either is supplied, and
+returns service/request/VM/HTTP/anomaly metadata. Structured VM equality covers
+compute records primarily; it does not reconstruct a complete lifecycle. See
+[OpenStack tracing examples, limits, tests and Compose verification](docs/openstack_tracing_mcp.md).
+
 `summarize_logs` accepts the same optional `query` and `match_mode` for pattern
 counts, component rankings, fictional team attribution and time trends over all
 matching records. Omitting `query` preserves the existing behavior. Time buckets

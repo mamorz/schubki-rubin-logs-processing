@@ -295,6 +295,18 @@ name = args[-1].split('/')[-1].split('?')[0]
 shutil.copyfile(pathlib.Path(os.environ['ARCHIVES']) / name, target)
 ''')
     curl.chmod(0o755)
+    # Downloading runs on the host, not in the slim MCP runtime. Supply only
+    # the unzip -p operation used by this fixture, extracting real ZIP bytes
+    # with the standard library instead of requiring a production OS package.
+    unzip = bin_dir / "unzip"
+    unzip.write_text('''#!/usr/bin/env python3
+import sys, zipfile
+if len(sys.argv) != 4 or sys.argv[1] != '-p':
+    sys.exit('fixture unzip supports only: unzip -p ARCHIVE MEMBER')
+with zipfile.ZipFile(sys.argv[2]) as archive:
+    sys.stdout.buffer.write(archive.read(sys.argv[3]))
+''')
+    unzip.chmod(0o755)
     env = dict(os.environ, PATH=f"{bin_dir}:{os.environ['PATH']}", ARCHIVES=str(archives),
                CALL_LOG=str(tmp_path / "curl-calls"))
     return downloader, env, tmp_path / "data/raw", members
@@ -316,6 +328,7 @@ def test_download_interruption_never_publishes_archive_or_member(download_fixtur
     downloader, env, raw, _ = download_fixture
     result = subprocess.run([str(downloader)], env=dict(env, FAIL_DOWNLOAD="1"), capture_output=True)
     assert result.returncode != 0
+    assert Path(env["CALL_LOG"]).exists(), "Fixture must reach curl, not fail a prerequisite check"
     assert not (raw / "BGL.zip").exists()
     assert not (raw / "BGL.log").exists()
     assert not list(raw.glob(".download.*"))
@@ -328,4 +341,19 @@ def test_corrupt_existing_source_is_preserved(download_fixture):
     result = subprocess.run([str(downloader)], env=env, capture_output=True, text=True)
     assert result.returncode != 0 and "Checksum mismatch" in result.stderr
     assert (raw / "BGL.log").read_bytes() == b"existing corrupt file"
+    assert not Path(env["CALL_LOG"]).exists()
+
+
+def test_download_missing_unzip_stops_before_fetch_or_publish(download_fixture, tmp_path):
+    downloader, env, raw, _ = download_fixture
+    # Isolate PATH so a host-installed unzip cannot mask the missing dependency.
+    # Only Bash, dirname and curl are needed before the script checks for unzip.
+    bin_dir = tmp_path / "missing-unzip-bin"
+    bin_dir.mkdir()
+    for tool in ("bash", "dirname", "curl"):
+        (bin_dir / tool).symlink_to(shutil.which(tool, path=env["PATH"]))
+    result = subprocess.run([str(downloader)], env=dict(env, PATH=str(bin_dir)), capture_output=True, text=True)
+    assert result.returncode != 0
+    assert "Install unzip first." in result.stderr
+    assert not raw.exists()
     assert not Path(env["CALL_LOG"]).exists()

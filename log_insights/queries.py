@@ -53,6 +53,7 @@ class DatasetSpec:
     ownership_file: str = OWNERSHIP_MAPPING_REPOSITORY_PATH
     ownership_version: str = OWNERSHIP_VERSION
     development_sample: bool = True
+    supports_openstack_tracing: bool = False
 
     @property
     def record_columns(self) -> str:
@@ -109,6 +110,7 @@ SQL_DATASET_SPECS: Mapping[str, DatasetSpec] = {
         ownership_file="data/ownership.csv",
         ownership_version="main-a75f858",
         development_sample=False,
+        supports_openstack_tracing=dataset == "openstack",
     )
     for dataset in ("bgl", "openstack")
 }
@@ -244,13 +246,15 @@ class NearbyEventsResult:
 def build_search_query_plan(
     *,
     dataset: str,
-    text: str,
+    text: str | None = None,
     start_time: datetime | None = None,
     end_time: datetime | None = None,
     component: str | None = None,
     severity: str | None = None,
     limit: int = DEFAULT_SEARCH_LIMIT,
     match_mode: str = "any",
+    request_id: str | None = None,
+    instance_id: str | None = None,
     _dataset_specs: Mapping[str, DatasetSpec] = DATASET_SPECS,
 ) -> SearchQueryPlan:
     """Validate a request and build SQL using only fixed relation names.
@@ -261,24 +265,36 @@ def build_search_query_plan(
 
     normalized_dataset = _normalize_dataset(dataset, _dataset_specs)
     normalized_mode = _normalize_match_mode(match_mode)
-    normalized_text = _search_text(text, normalized_mode)
+    spec = _dataset_specs[normalized_dataset]
+    normalized_request = _optional_text(request_id, "request_id")
+    normalized_instance = _optional_text(instance_id, "instance_id")
+    has_identifiers = normalized_request is not None or normalized_instance is not None
+    if has_identifiers and (normalized_dataset != "openstack" or not spec.supports_openstack_tracing):
+        raise ValueError(
+            "request_id and instance_id filters require dataset='openstack' with "
+            "the SQL backend (MCP_DATASET_BACKEND=sql); BGL and sample tables do not support them"
+        )
+    if text is None and not has_identifiers:
+        raise ValueError("query is required unless request_id or instance_id is supplied for SQL-backed OpenStack")
+    normalized_text = None if text is None else _search_text(text, normalized_mode)
     normalized_component = _optional_text(component, "component")
     normalized_severity = _optional_text(severity, "severity")
     _validate_timestamp_range(start_time, end_time)
     _validate_limit(limit, MAX_SEARCH_LIMIT)
 
-    spec = _dataset_specs[normalized_dataset]
-    predicates = [SEARCH_PREDICATES[normalized_mode]]
+    predicates = [] if normalized_text is None else [SEARCH_PREDICATES[normalized_mode]]
     # An analyzed index is for token matching. Raw equality must compare the
     # complete stored message, including case, punctuation and whitespace.
-    relation = spec.table if normalized_mode == "exact" else spec.index_relation
-    if normalized_mode != "exact" and (start_time is not None or end_time is not None):
+    relation = spec.table if normalized_mode == "exact" or normalized_text is None else spec.index_relation
+    if normalized_text is not None and normalized_mode != "exact" and (
+        start_time is not None or end_time is not None or spec.supports_openstack_tracing
+    ):
         # SereneDB 26.09's indexed timestamp range can include out-of-range rows.
         # Keep full-text matching in the index but apply time/filter predicates
         # to base-table candidates. Use this same plan for records AND counts.
         relation = spec.table
         predicates = [_indexed_message_candidates(spec, normalized_mode)]
-    count_parameters: dict[str, Any] = {"text": normalized_text}
+    count_parameters: dict[str, Any] = {} if normalized_text is None else {"text": normalized_text}
     applied_filters: dict[str, Any] = {
         "full_text_query": normalized_text,
         "match_mode": normalized_mode,
@@ -289,6 +305,11 @@ def build_search_query_plan(
         "timestamp_bounds": "start inclusive, end exclusive",
         "result_limit": limit,
     }
+    for field, value in (("request_id", normalized_request), ("instance_id", normalized_instance)):
+        if value is not None:
+            predicates.append(f"{field} = %({field})s")
+            count_parameters[field] = value
+            applied_filters[field] = value
 
     if start_time is not None:
         # 26.09's inverted-index path rejects psycopg binary datetime values.
@@ -306,8 +327,13 @@ def build_search_query_plan(
         count_parameters["severity"] = normalized_severity
 
     where_clause = " AND\n    ".join(predicates)
+    columns = spec.record_columns
+    if spec.supports_openstack_tracing:
+        # These fields exist on the SQL base table; latency_s/is_anomaly are not
+        # projected by its inverted relation. Preserve SQL NULL values as-is.
+        columns += ",\n    request_id,\n    instance_id,\n    service,\n    http_status,\n    latency_s,\n    is_anomaly"
     sql = f"""SELECT
-    {spec.record_columns}
+    {columns}
 FROM {relation}
 WHERE {where_clause}
 ORDER BY {spec.time_column}, {spec.id_expression}
@@ -572,13 +598,15 @@ class QueryService:
         self,
         *,
         dataset: str,
-        text: str,
+        text: str | None = None,
         start_time: datetime | None = None,
         end_time: datetime | None = None,
         component: str | None = None,
         severity: str | None = None,
         limit: int = DEFAULT_SEARCH_LIMIT,
         match_mode: str = "any",
+        request_id: str | None = None,
+        instance_id: str | None = None,
     ) -> QueryResult:
         """Retrieve bounded message matches and the complete filtered count."""
 
@@ -591,6 +619,8 @@ class QueryService:
             severity=severity,
             limit=limit,
             match_mode=match_mode,
+            request_id=request_id,
+            instance_id=instance_id,
             _dataset_specs=self._dataset_specs,
         )
 

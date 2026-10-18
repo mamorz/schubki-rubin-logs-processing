@@ -285,3 +285,21 @@ def test_pattern_team_summary_keeps_unmapped_records_and_source_identities(sql_f
     assert next(g["record_count"] for g in result.groups if g["team"] == "UNMAPPED") == unmapped
     assert result.mapping_coverage["unmapped_record_count"] == unmapped
     assert result.ownership_provenance["fictional"] is True
+
+
+def test_structured_openstack_filters_preserve_nulls_and_disambiguate_source_ids(sql_fixture):
+    db, factory = sql_fixture
+    # Disposable SQLite fixture only. No live DB writes are used in tracing tests.
+    db.execute("UPDATE openstack_logs SET request_id = 'req-one', instance_id = 'vm-one' "
+               "WHERE source_file IN ('openstack_abnormal', 'openstack_normal2')")
+    service = QueryService(factory, SQL_DATASET_SPECS)
+    result = service.search_logs(dataset="openstack", request_id="req-one", instance_id="vm-one", limit=1)
+    assert result.total_corpus_match_count == 2 and result.truncated
+    assert result.rows[0]["record_id"] == 1000000001
+    assert result.rows[0]["http_status"] is None and result.rows[0]["latency_s"] is None
+    assert result.rows[0]["service"] == "nova-compute"
+    text = service.search_logs(dataset="openstack", request_id="req-one", text="instance", limit=50)
+    assert [r["record_id"] for r in text.rows] == [1000000001, 3000000001]
+    assert text.total_corpus_match_count == 2 and not text.truncated
+    empty = service.search_logs(dataset="openstack", request_id="req-one", text="not-present", limit=1)
+    assert empty.total_corpus_match_count == 0 and not empty.truncated
