@@ -192,7 +192,7 @@ They may only call the six rubin tools (no shell, file or web access).
 `agent-ui/` is a React + Fastify app that drives the official Kiro CLI over the Agent Client
 Protocol. It provides:
 - **Device-code sign-in**, the role dropdown and suggested questions per role.
-- **Workflow timeline:** reasoning and tool calls in order, folding automatically after five calls.
+- **Workflow timeline:** reasoning and tool calls in order, folding automatically once a request makes more than two tool calls.
 - **Generic evidence cards** built from the shape of any tool result: tables, small-multiple
   time-series charts, timelines with gaps, stat groups, SQL with parameters, truncation and
   "not available" notes. New tools need no UI code.

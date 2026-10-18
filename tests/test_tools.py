@@ -37,11 +37,11 @@ def test_health_tool_is_registered_and_callable() -> None:
             assert result.structured_content is not None
             return result.structured_content
 
-    assert anyio.run(call_health_check) == {
-        "status": "ok",
-        "database": "not checked",
-        "log_analysis_tools": "search_logs,summarize_logs,get_nearby_events",
-    }
+    health = anyio.run(call_health_check)
+    assert health["status"] == "ok"
+    assert health["database"] == "not checked"
+    # Derived from the registry: every registered tool except health_check itself.
+    assert set(health["log_analysis_tools"].split(",")) == {tool.name for tool in PLANNED_TOOLS}
 
 
 def test_search_tool_reports_invalid_parameters_without_opening_database() -> None:

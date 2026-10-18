@@ -46,7 +46,7 @@ browser ──WS /api/session──▶ Fastify (src/server) ──stdio ACP─�
   context. History Kiro replays during the load is not sent to the browser a second time. The
   ledger's clear button wipes both and starts fresh sessions.
 - Each answer is a workflow log in the order the agent worked: reasoning steps and tool calls on
-  a timeline, followed by the answer text. The log folds automatically after 5 tool calls.
+  a timeline, followed by the answer text. The log folds automatically once a request makes more than 2 tool calls.
 - The bridge (`src/server/acpBridge.ts`) uses the official `@agentclientprotocol/sdk`. It
   offers **no** file system or terminal capabilities to the agent, and its permission
   handler allows only `rubin-log-insights` tools.

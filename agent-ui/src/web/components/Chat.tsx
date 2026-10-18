@@ -119,7 +119,7 @@ function TurnView({ turn }: { turn: Turn }) {
   );
 }
 
-const WORKFLOW_AUTO_FOLD_AFTER = 5;
+const WORKFLOW_AUTO_FOLD_AFTER = 2;
 
 /** Timeline of the agent's reasoning and tool calls, in the order they happened. */
 function WorkflowLog({ items, autoFold, live }: { items: TurnItem[]; autoFold: boolean; live: boolean }) {

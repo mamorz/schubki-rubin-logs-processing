@@ -78,15 +78,20 @@ PLANNED_TOOLS: tuple[PlannedTool, ...] = (
 def register_tools(server: MCPServer, queries: QueryService) -> None:
     """Register health, search, aggregation, and chronological-context tools."""
 
+    # No _database_errors wrapper: health_check never queries SereneDB, and the wrapper is synchronous.
     @server.tool()
-    @_database_errors
-    def health_check() -> dict[str, str]:
-        """Confirm that the MCP server is running without querying SereneDB."""
+    async def health_check() -> dict[str, str]:
+        """Confirm that the MCP server is running without querying SereneDB.
 
+        log_analysis_tools lists every registered tool except health_check itself,
+        read from the server's tool registry, so newly added tools appear automatically.
+        """
+
+        names = [tool.name for tool in await server.list_tools() if tool.name != "health_check"]
         return {
             "status": "ok",
             "database": "not checked",
-            "log_analysis_tools": "search_logs,summarize_logs,get_nearby_events",
+            "log_analysis_tools": ",".join(names),
         }
 
     @server.tool()
