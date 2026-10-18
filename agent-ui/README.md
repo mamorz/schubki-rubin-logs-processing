@@ -20,7 +20,8 @@ open http://localhost:18080
    (`kiro-cli login --use-device-flow`, AWS Builder ID). Confirm the code in any browser.
    No port forwarding or API key is needed.
 2. Pick **Engineer**, **Team lead** or **Manager** and ask a question, or click a suggestion.
-3. Open the tool cards to see the SQL and results. **Export** in the evidence ledger downloads the session.
+3. Open the tool cards to see the SQL and results. Ledger entries link to their card, and each
+   request's **Export** downloads its full report (workflow, results, SQL, answer) as Markdown.
 
 The login is stored in the `schubki-jury_kiro-home` Docker volume and survives restarts.
 The sign-out button in the header runs `kiro-cli logout`. Each answer shows the Kiro credits
@@ -52,15 +53,25 @@ browser ──WS /api/session──▶ Fastify (src/server) ──stdio ACP─�
 - Kiro wraps MCP results as `rawOutput.items[].Json.content[].text`. `src/server/toolCalls.ts`
   unwraps them.
 - **Tool cards are generic.** `src/shared/toolResult.ts` describes any JSON result by its
-  shape, never by tool name:
-  - arrays of flat objects become tables, with columns discovered and all-empty ones dropped
-  - label plus `*count` rows become bar lists
-  - `executed_sql` with sibling `parameters` becomes highlighted SQL blocks
-  - `truncated` becomes the badge
-  - an object between `before_*` / `after_*` arrays becomes a highlighted timeline
-  - `*warning` / `*note` strings become notes, and scalars become stat tiles
+  shape, never by tool name. The conventions, recognised at any depth:
+
+  | In the result | Rendered as |
+  |---|---|
+  | `truncated` / `*_truncated` booleans | truncation badge; nested flags name the section (e.g. "truncated: ranking") |
+  | `executed_sql` (`{name: sql}` or a string) + sibling `parameters` | SQL blocks; parameters are matched by name, or apply to all statements if unkeyed |
+  | `error`, or `status: "error"/"failed"` | error card (real MCP tool errors arrive as failed calls and are shown the same way) |
+  | nested object of mostly numbers (`counts`, `statistics`, `baseline`, …) | labelled stat-tile group; its text values go to details |
+  | array of rows with a time-bucket column (`bucket*`, `*_start`, `period`, …) | small multiples: one column chart per metric (≤ 4, each on its own scale) plus a table view |
+  | array of rows with one label and one `*count` | bar list |
+  | array of rows ordered by `timestamp` | timeline table with a rail and a "Δ prev" gap column |
+  | object between `before_*` / `after_*` arrays | one timeline with that row highlighted |
+  | columns empty in every row | hidden, but listed under the table as "not available" |
+  | `warnings` / `limitations` lists, `*warning` / `*note` strings | notes |
+  | `http_status`, `severity`/`level`, `is_*`/`has_*`, `*_id`, time columns | status-coloured / flag chips, IDs kept on one line, readable dates |
 
   New MCP tools and new fields render without UI changes as long as they follow these conventions.
+  `test/mcpContract.test.ts` checks them against real responses of all five tools
+  (`test/fixtures/mcp/`, recorded from `feature/advanced-log-analytics`).
 - Credits per turn come from Kiro's `_kiro.dev/metadata` extension notification.
 
 ## Role agents: contract with the agent definitions

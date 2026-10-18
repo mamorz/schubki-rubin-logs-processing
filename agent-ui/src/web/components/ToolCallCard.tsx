@@ -4,7 +4,7 @@ import { Highlight, themes } from "prism-react-renderer";
 import { useEffect, useRef, useState } from "react";
 import type { ToolCallView } from "../../shared/events";
 import { useChat } from "../store";
-import { describeResult, humanize, type BarsView, type ResultModel, type Row, type TableView } from "../../shared/toolResult";
+import { describeResult, humanize, type BarsView, type ResultModel, type Row, type SeriesView, type TableView } from "../../shared/toolResult";
 
 let handledFocus = 0;
 
@@ -46,7 +46,7 @@ export function ToolCallCard({ call, defaultOpen = false }: { call: ToolCallView
         <span className="hidden min-w-0 flex-1 truncate font-mono text-xs text-slate-500 sm:block">{formatArgs(call.input)}</span>
         <span className="ml-auto flex shrink-0 items-center gap-2">
           <TruncationBadge model={model} />
-          <StatusIcon status={call.status} />
+          <StatusIcon status={model?.error ? "failed" : call.status} />
         </span>
       </Collapsible.Trigger>
       {model?.headline && (
@@ -54,6 +54,7 @@ export function ToolCallCard({ call, defaultOpen = false }: { call: ToolCallView
       )}
       <Collapsible.Content className="space-y-3 border-t border-slate-100 p-3 dark:border-slate-800">
         {call.input && <KeyValues title="Arguments" values={call.input} />}
+        {call.status === "failed" && <ErrorNote text={call.outputText ?? (call.output ? JSON.stringify(call.output) : "The tool call failed.")} />}
         {model ? <ResultView model={model} /> : call.status === "completed" && <RawOutput call={call} />}
         {model && call.outputText && <RawOutput call={call} />}
       </Collapsible.Content>
@@ -62,20 +63,48 @@ export function ToolCallCard({ call, defaultOpen = false }: { call: ToolCallView
 }
 
 function ResultView({ model }: { model: ResultModel }) {
+  const seriesLabels = new Set(model.series.map((series) => series.label));
   return (
     <>
+      {model.error && <ErrorNote text={model.error} />}
       {model.stats.length > 0 && <Stats items={model.stats} />}
-      {model.bars.map((bars) => <BarList key={bars.key} bars={bars} />)}
-      {model.tables.map((table) => <DataTable key={table.key} table={table} />)}
-      {model.notes.map((note) => (
-        <p key={note.label} className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+      {model.statGroups.map((group) => (
+        <div key={group.key}>
+          <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">{group.label}</h4>
+          <Stats items={group.stats} />
+        </div>
+      ))}
+      {model.series.map((series) => <SeriesChart key={series.key + series.label} series={series} />)}
+      {model.bars.map((bars) => <BarList key={bars.key + bars.label} bars={bars} />)}
+      {model.tables.map((table) =>
+        seriesLabels.has(table.label) ? (
+          <Collapsible.Root key={table.key}>
+            <Collapsible.Trigger className="group flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+              <ChevronRight className="size-3 transition group-data-[state=open]:rotate-90" /> Table view · {table.label}
+            </Collapsible.Trigger>
+            <Collapsible.Content className="mt-2"><DataTable table={table} /></Collapsible.Content>
+          </Collapsible.Root>
+        ) : (
+          <DataTable key={table.key} table={table} />
+        ),
+      )}
+      {model.notes.map((note, i) => (
+        <p key={i} className="flex items-start gap-1.5 text-xs text-amber-700 dark:text-amber-400">
           <AlertTriangle className="mt-0.5 size-3 shrink-0" />
           <span><span className="font-medium">{note.label}:</span> {note.text}</span>
         </p>
       ))}
       {model.details.map((detail) => <KeyValues key={detail.label} title={detail.label} values={detail.values} />)}
-      {model.sql.map((query) => <SqlBlock key={query.name} name={query.name} sql={query.sql} parameters={query.parameters} />)}
+      {model.sql.map((query, i) => <SqlBlock key={`${query.name}-${i}`} name={query.name} sql={query.sql} parameters={query.parameters} />)}
     </>
+  );
+}
+
+function ErrorNote({ text }: { text: string }) {
+  return (
+    <p className="flex items-start gap-1.5 rounded-lg bg-red-50 px-2.5 py-2 text-xs text-red-700 dark:bg-red-950/40 dark:text-red-300">
+      <X className="mt-0.5 size-3.5 shrink-0" /> <span className="font-mono">{text}</span>
+    </p>
   );
 }
 
@@ -94,9 +123,10 @@ function StatusIcon({ status }: { status: ToolCallView["status"] }) {
 }
 
 export function TruncationBadge({ model }: { model: ResultModel | null }) {
-  if (!model || model.truncated === null) return null;
+  if (!model || model.truncated === null || model.error) return null;
+  const sections = [...new Set(model.truncatedSections)].join(", ");
   return model.truncated ? (
-    <span className="chip bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+    <span className="chip bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300" title={sections ? `Truncated: ${sections}` : "Not every matching row was returned"}>
       <AlertTriangle className="size-3" /> truncated
     </span>
   ) : (
@@ -142,13 +172,32 @@ const SEVERITY_STYLES: Record<string, string> = {
   WARN: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
 };
 
-const BADGE_COLUMN = /severity|level|status/i;
-const TIME_COLUMN = /timestamp|time$|^ts$|_at$/i;
+const BADGE_COLUMN = /severity|level|^status$/i;
+const HTTP_COLUMN = /http_status|status_code/i;
+const FLAG_COLUMN = /^(is|has)_/i;
+const BAD_FLAG = /anomal|error|fail|slow|timeout/i;
+const TIME_COLUMN = /timestamp|time$|^ts$|_at$|^bucket|_start$|_end$|^date$|^period$|^observed/i;
 const WIDE_COLUMN = /message|text|description/i;
-const OFFSET_COLUMN = /seconds|offset|gap|latency/i;
+/** Signed values relative to something (anchor, previous event); durations stay unsigned. */
+const OFFSET_COLUMN = /from_anchor|offset|^gap|_gap|delta/i;
+
+function httpStyle(code: number): string {
+  if (code >= 500) return SEVERITY_STYLES.ERROR!;
+  if (code >= 400) return SEVERITY_STYLES.WARNING!;
+  if (code >= 200 && code < 300) return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300";
+  return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
+}
 
 function Cell({ column, value }: { column: string; value: unknown }) {
   if (value === null || value === undefined) return <span className="text-slate-300 dark:text-slate-600">–</span>;
+  if (HTTP_COLUMN.test(column) && typeof value === "number") return <span className={`chip ${httpStyle(value)}`}>{value}</span>;
+  if (typeof value === "boolean") {
+    if (!FLAG_COLUMN.test(column)) return <>{value ? "yes" : "no"}</>;
+    const tone = !value
+      ? "bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400"
+      : BAD_FLAG.test(column) ? SEVERITY_STYLES.ERROR! : "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300";
+    return <span className={`chip ${tone}`}>{value ? humanize(column.replace(FLAG_COLUMN, "")) : "no"}</span>;
+  }
   if (BADGE_COLUMN.test(column) && typeof value === "string") {
     return <span className={`chip ${SEVERITY_STYLES[value.toUpperCase()] ?? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"}`}>{value}</span>;
   }
@@ -157,47 +206,163 @@ function Cell({ column, value }: { column: string; value: unknown }) {
     const signed = OFFSET_COLUMN.test(column) && value > 0 ? "+" : "";
     return <>{signed}{value.toLocaleString("en-US", { maximumFractionDigits: 3 })}</>;
   }
-  if (typeof value === "boolean") return <>{value ? "yes" : "no"}</>;
   return <>{String(value)}</>;
+}
+
+/** Rows that deserve attention in any table: flagged anomalies/slow events or error severities. */
+function isFlagged(row: Row): boolean {
+  return Object.entries(row).some(
+    ([k, v]) => (FLAG_COLUMN.test(k) && BAD_FLAG.test(k) && v === true) || (BADGE_COLUMN.test(k) && typeof v === "string" && /^(ERROR|FATAL|FAILURE|CRITICAL|SEVERE)$/i.test(v)),
+  );
+}
+
+function formatGap(ms: number): string {
+  const s = ms / 1000;
+  if (s < 1) return `+${s.toFixed(3)} s`;
+  if (s < 120) return `+${s.toFixed(1)} s`;
+  if (s < 7200) return `+${(s / 60).toFixed(1)} min`;
+  return `+${(s / 3600).toFixed(1)} h`;
 }
 
 function DataTable({ table }: { table: TableView }) {
   const numeric = new Set(table.columns.filter((c) => table.rows.every((r) => r[c] === null || typeof r[c] === "number")));
+  const timeKey = table.columns.find((c) => /timestamp|^ts$|_at$/i.test(c));
+  const times = timeKey ? table.rows.map((r) => Date.parse(String(r[timeKey]))) : [];
+  const showGap = table.chronological && !table.columns.some((c) => /gap/i.test(c));
   return (
     <div>
       <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
-        {table.label} <span className="font-normal normal-case">({table.rows.length})</span>
+        {table.label} <span className="font-normal normal-case">({table.rows.length}{table.chronological ? ", in time order" : ""})</span>
       </h4>
       <div className="max-h-80 overflow-auto rounded-lg border border-slate-100 dark:border-slate-800">
         <table className="w-full text-xs">
-          <thead className="sticky top-0 bg-slate-50 text-left text-slate-500 dark:bg-slate-900">
+          <thead className="sticky top-0 z-10 bg-slate-50 text-left text-slate-500 dark:bg-slate-900">
             <tr>
+              {table.chronological && <th className="w-6 px-0" aria-label="timeline" />}
               {table.columns.map((c) => (
                 <th key={c} className={`px-2 py-1 font-medium whitespace-nowrap ${numeric.has(c) ? "text-right" : ""}`}>{humanize(c)}</th>
               ))}
+              {showGap && <th className="px-2 py-1 text-right font-medium whitespace-nowrap">Δ prev</th>}
             </tr>
           </thead>
           <tbody className="font-mono">
-            {table.rows.map((row, i) => (
-              <tr
-                key={i}
-                className={`border-t border-slate-100 align-top dark:border-slate-800 ${i === table.highlightRow ? "bg-ruby-50 dark:bg-ruby-900/20" : ""}`}
-              >
-                {table.columns.map((c) => (
-                  <td
-                    key={c}
-                    className={`px-2 py-1 ${numeric.has(c) ? "text-right tabular-nums" : ""} ${WIDE_COLUMN.test(c) ? "min-w-64 font-sans" : ""}`}
-                  >
-                    <Cell column={c} value={row[c]} />
-                  </td>
-                ))}
-              </tr>
-            ))}
+            {table.rows.map((row, i) => {
+              const flagged = isFlagged(row);
+              const anchor = i === table.highlightRow;
+              return (
+                <tr
+                  key={i}
+                  className={`border-t border-slate-100 align-top dark:border-slate-800 ${anchor ? "bg-ruby-50 dark:bg-ruby-900/20" : flagged ? "bg-red-50/40 dark:bg-red-950/15" : ""}`}
+                >
+                  {table.chronological && (
+                    <td
+                      aria-hidden="true"
+                      className="w-6 bg-linear-to-b from-slate-200 to-slate-200 bg-[length:1px_100%] bg-center bg-no-repeat px-0 py-1 dark:from-slate-700 dark:to-slate-700"
+                    >
+                      <span className={`mx-auto mt-1 block size-2 rounded-full ring-2 ring-white dark:ring-slate-900 ${anchor || flagged ? "bg-ruby-600 dark:bg-ruby-500" : "bg-slate-400"}`} />
+                    </td>
+                  )}
+                  {table.columns.map((c) => (
+                    <td key={c} className={`px-2 py-1 ${numeric.has(c) ? "text-right tabular-nums" : ""} ${WIDE_COLUMN.test(c) ? "min-w-64 font-sans" : ""} ${/(^|_)id$/i.test(c) ? "whitespace-nowrap" : ""}`}>
+                      <Cell column={c} value={row[c]} />
+                    </td>
+                  ))}
+                  {showGap && (
+                    <td className="px-2 py-1 text-right whitespace-nowrap text-slate-500 tabular-nums">
+                      {i > 0 && !Number.isNaN(times[i]!) ? formatGap(times[i]! - times[i - 1]!) : ""}
+                    </td>
+                  )}
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
+      {table.unavailable.length > 0 && (
+        <p className="mt-1 text-[11px] text-slate-500">Not available in any returned row: {table.unavailable.map(humanize).join(", ")}</p>
+      )}
     </div>
   );
+}
+
+const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
+
+/** Small multiples: one column chart per metric, each on its own scale, hover synced across charts. */
+function SeriesChart({ series }: { series: SeriesView }) {
+  const [hover, setHover] = useState<number | null>(null);
+  // Plot oldest → newest even when the tool sorted buckets newest first.
+  const first = Date.parse(String(series.rows[0]?.[series.xKey]));
+  const last = Date.parse(String(series.rows[series.rows.length - 1]?.[series.xKey]));
+  const rows = first > last ? [...series.rows].reverse() : series.rows;
+  const W = 320;
+  const H = 88;
+  const top = 14;
+  const slot = W / rows.length;
+  const barW = Math.max(2, Math.min(24, slot - 2));
+  const label = (row: Row | undefined) => String(row?.[series.xKey] ?? "").replace("T", " ").replace(/:00(\.0+)?$/, "");
+  const active = hover === null ? null : rows[hover];
+  return (
+    <div>
+      <h4 className="mb-1 text-xs font-semibold uppercase tracking-wide text-slate-500">
+        {series.label} <span className="font-normal normal-case">· {rows.length} buckets by {humanize(series.xKey)}</span>
+      </h4>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {series.metrics.map((metric) => {
+          const values = rows.map((r) => (typeof r[metric] === "number" ? (r[metric] as number) : null));
+          const max = Math.max(0, ...values.map((v) => v ?? 0));
+          const peak = values.indexOf(max);
+          return (
+            <figure key={metric} className="rounded-lg bg-slate-50 p-2 dark:bg-slate-800/50">
+              <figcaption className="flex items-baseline justify-between gap-2 text-[11px] text-slate-600 dark:text-slate-300">
+                <span className="truncate font-medium">{humanize(metric)}</span>
+                <span className="shrink-0 font-mono text-slate-500 tabular-nums">max {compact.format(max)}</span>
+              </figcaption>
+              <svg
+                viewBox={`0 0 ${W} ${H}`}
+                className="mt-1 block h-24 w-full"
+                preserveAspectRatio="none"
+                role="img"
+                aria-label={`${humanize(metric)} per ${humanize(series.xKey)}, peak ${compact.format(max)} at ${label(rows[peak])}`}
+                onPointerLeave={() => setHover(null)}
+              >
+                <line x1="0" x2={W} y1={H - 0.5} y2={H - 0.5} className="stroke-slate-200 dark:stroke-slate-700" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                {values.map((v, i) => {
+                  const x = i * slot + (slot - barW) / 2;
+                  const h = v === null || max === 0 ? 0 : Math.max(1, (v / max) * (H - top));
+                  const r = Math.min(4, barW / 2, h);
+                  const y = H - h;
+                  return (
+                    <g key={i}>
+                      {h > 0 && (
+                        <path
+                          d={`M${x},${H} V${y + r} Q${x},${y} ${x + r},${y} H${x + barW - r} Q${x + barW},${y} ${x + barW},${y + r} V${H} Z`}
+                          className={hover === null || hover === i ? "fill-ruby-600 dark:fill-ruby-500" : "fill-ruby-600/35 dark:fill-ruby-500/35"}
+                        />
+                      )}
+                      <rect x={i * slot} y={0} width={slot} height={H} fill="transparent" onPointerEnter={() => setHover(i)} />
+                    </g>
+                  );
+                })}
+              </svg>
+              <div className="mt-0.5 flex justify-between font-mono text-[10px] text-slate-400">
+                <span>{label(rows[0])}</span>
+                <span>{label(rows[rows.length - 1])}</span>
+              </div>
+            </figure>
+          );
+        })}
+      </div>
+      <p className="mt-1 min-h-4 font-mono text-[11px] text-slate-600 dark:text-slate-400" aria-live="polite">
+        {active
+          ? `${label(active)} · ${series.metrics.map((m) => `${humanize(m)} ${active[m] === null ? "–" : formatNumber(active[m])}`).join(" · ")}`
+          : "Hover a column to compare all metrics for that bucket."}
+      </p>
+    </div>
+  );
+}
+
+function formatNumber(value: unknown): string {
+  return typeof value === "number" ? value.toLocaleString("en-US", { maximumFractionDigits: 3 }) : String(value);
 }
 
 function BarList({ bars }: { bars: BarsView }) {

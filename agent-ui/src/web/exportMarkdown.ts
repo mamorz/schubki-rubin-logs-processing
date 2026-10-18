@@ -22,11 +22,15 @@ function toolSection(call: ToolCallView, index: number): string[] {
     return lines;
   }
   lines.push(`**Result:** ${model.headline}${model.truncated === false ? " (complete)" : ""}`, "");
+  if (model.error) lines.push(`> **Error:** ${model.error}`, "");
   if (model.stats.length > 0) lines.push(...model.stats.map((s) => `- ${s.label}: ${s.value}`), "");
+  for (const group of model.statGroups) lines.push(`**${group.label}**`, "", ...group.stats.map((s) => `- ${s.label}: ${s.value}`), "");
   for (const bars of model.bars) lines.push(`**${bars.label}**`, "", ...table([...bars.labelKeys, bars.countKey], bars.rows), "");
+  // Time series are exported through their full table below.
   for (const t of model.tables) {
     const rows = t.highlightRow === null ? t.rows : t.rows.map((r, i) => (i === t.highlightRow ? { ...r, "": "◀ anchor" } : r));
-    lines.push(`**${t.label}** (${t.rows.length} rows)`, "", ...table(t.highlightRow === null ? t.columns : [...t.columns, ""], rows), "");
+    lines.push(`**${t.label}** (${t.rows.length} rows${t.chronological ? ", in time order" : ""})`, "", ...table(t.highlightRow === null ? t.columns : [...t.columns, ""], rows), "");
+    if (t.unavailable.length > 0) lines.push(`_Not available in any returned row: ${t.unavailable.map(humanize).join(", ")}_`, "");
   }
   for (const note of model.notes) lines.push(`> **${note.label}:** ${note.text}`, "");
   for (const detail of model.details) {
