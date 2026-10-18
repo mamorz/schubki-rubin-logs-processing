@@ -78,12 +78,21 @@ Repeat the automated MCP verification without importing data:
 
 ```bash
 ./scripts/jury-compose.sh exec -T mcp-server python -m scripts.verify_mcp_http --url http://127.0.0.1:8000/mcp
-# Also check pattern aggregation, OpenStack tracing and spawn performance on the full corpus:
-./scripts/jury-compose.sh exec -T mcp-server python -m scripts.verify_mcp_http --url http://127.0.0.1:8000/mcp --patterns --tracing --performance
+# Also check pattern aggregation, OpenStack tracing, spawn performance and BGL spikes on the full corpus:
+./scripts/jury-compose.sh exec -T mcp-server python -m scripts.verify_mcp_http --url http://127.0.0.1:8000/mcp --patterns --tracing --performance --spikes
 curl --fail http://localhost:18000/healthz
 ```
 
 `/healthz` and the `health_check` tool check the process; the other tools exercise the database.
+
+Every SQL statement issued by the MCP server has a deadline, `MCP_SQL_TIMEOUT_SECONDS` (default
+15 s, allowed 0.001–3600). The full-corpus verification above finishes in a few seconds on a
+laptop. On a much slower machine, raise it for the session; the setup wrapper passes the shell
+variable through even though it ignores `.env` files:
+
+```bash
+MCP_SQL_TIMEOUT_SECONDS=60 ./scripts/agent-ui-up.sh     # or ./scripts/jury-up.sh
+```
 
 Run the complete Python suite in Compose against the running database (source mounted read-only,
 deployed services keep running):
